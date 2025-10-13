@@ -3,3 +3,4 @@
 .env
 ai_context
 .vscode
+*cpython*
