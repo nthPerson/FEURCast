@@ -15,13 +15,32 @@ from typing import Dict, List, Any, Optional
 import os
 from openai import OpenAI
 
+# NOTE: Local use only!
+# def get_openai_client():
+#     """Initialize OpenAI client with API key from environment"""
+#     from dotenv import load_dotenv
+#     load_dotenv(os.path.join(os.path.dirname(__file__), '../..', '.env'))
+#     api_key = os.getenv('OPENAI_API_KEY')
+#     print(api_key)
+#     return OpenAI(api_key=api_key)
 
+# NOTE: This method needs to be used on the hosted app. Do not use for local development
 def get_openai_client():
-    """Initialize OpenAI client with API key from environment"""
-    from dotenv import load_dotenv
-    load_dotenv(os.path.join(os.path.dirname(__file__), '../..', '.env'))
-    api_key = os.getenv('OPENAI_API_KEY')
-    print(api_key)
+    """Initialize OpenAI client with API key from environment or Streamlit secrets"""
+    import streamlit as st
+    
+    # Try Streamlit secrets first (for deployed app)
+    try:
+        api_key = st.secrets["OPENAI_API_KEY"]
+    except (FileNotFoundError, KeyError):
+        # Fall back to environment variable (for local development)
+        from dotenv import load_dotenv
+        load_dotenv(os.path.join(os.path.dirname(__file__), '../..', '.env'))
+        api_key = os.getenv('OPENAI_API_KEY')
+    
+    if not api_key:
+        raise ValueError("OpenAI API key not found in secrets or environment")
+    
     return OpenAI(api_key=api_key)
 
 
