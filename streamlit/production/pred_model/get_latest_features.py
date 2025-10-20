@@ -13,7 +13,7 @@ from typing import Optional
 # Setup paths
 MODULE_DIR = Path(__file__).parent
 PRED_MODEL_DIR = MODULE_DIR.parent
-DATA_PATH = PRED_MODEL_DIR.parent.parent.parent / "data" / "rich_features_SPLG_history_full.csv"
+DATA_PATH = PRED_MODEL_DIR.parent.parent / "data" / "rich_features_SPLG_history_full.csv"
 
 
 def get_latest_features(n_days: int = 1) -> pd.DataFrame:

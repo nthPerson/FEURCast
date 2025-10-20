@@ -21,7 +21,6 @@ def get_openai_client():
     from dotenv import load_dotenv
     load_dotenv(os.path.join(os.path.dirname(__file__), '../..', '.env'))
     api_key = os.getenv('OPENAI_API_KEY')
-    print(api_key)
     return OpenAI(api_key=api_key)
 
 
@@ -112,8 +111,8 @@ def predict_splg(use_real_model: bool = True) -> Dict[str, Any]:
             if str(pred_model_path) not in sys.path:
                 sys.path.insert(0, str(pred_model_path))
             
-            from predict import load_model, predict_with_explanation
-            from get_latest_features import get_latest_features
+            from predict import load_model, predict_with_explanation  # type: ignore
+            from get_latest_features import get_latest_features  # type: ignore
             
             # Load model
             model_bundle = load_model()
@@ -121,8 +120,8 @@ def predict_splg(use_real_model: bool = True) -> Dict[str, Any]:
             # Get latest features
             latest_features = get_latest_features(1)
             
-            # Make prediction
-            result = predict_with_explanation(model_bundle, latest_features, top_features=5)
+            # Make prediction with CORRECT argument order: (features, model_bundle)
+            result = predict_with_explanation(latest_features, model_bundle, top_n=5)
             
             # Format for app consumption
             return {
@@ -132,12 +131,13 @@ def predict_splg(use_real_model: bool = True) -> Dict[str, Any]:
                 'top_features': result['top_features']
             }
             
-        except FileNotFoundError:
+        except FileNotFoundError as e:
             # Model not trained yet, fall back to simulated
-            print("⚠️ Trained model not found. Using simulated prediction. Train model with: python pred_model/scripts/train_gbr_model.py --quick")
+            print(f"⚠️ Trained model not found: {e}")
+            print("   To train: cd pred_model && python scripts/train_gbr_model.py --quick")
             use_real_model = False
         except Exception as e:
-            print(f"⚠️ Error loading model: {e}. Using simulated prediction.")
+            print(f"⚠️ Error loading model: {e}")
             use_real_model = False
     
     if not use_real_model:
@@ -175,6 +175,7 @@ Make the prediction realistic based on current market conditions. Features shoul
                 
             return result
         except Exception as e:
+            print(f"⚠️ Error with LLM fallback: {e}")
             # Final fallback to static data
             return {
                 'predicted_return': 0.0035,
