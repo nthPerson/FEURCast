@@ -4,3 +4,4 @@
 ai_context
 .vscode
 *cpython*
+.streamlit.secrets.toml
