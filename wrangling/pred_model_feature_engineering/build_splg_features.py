@@ -62,8 +62,12 @@ def rsi(close: pd.Series, window: int = 14) -> pd.Series:
     loss = -delta.clip(upper=0.0)
     avg_gain = gain.rolling(window).mean()
     avg_loss = loss.rolling(window).mean()
-    rs = avg_gain / avg_loss
-    return 100 - (100 / (1 + rs))
+    # Avoid division by zero: if avg_loss is 0, RSI should be 100
+    # Add small epsilon to denominator to prevent inf
+    rs = avg_gain / (avg_loss + 1e-10)
+    rsi_values = 100 - (100 / (1 + rs))
+    # Cap RSI between 0 and 100
+    return rsi_values.clip(0, 100)
 
 def true_range(high: pd.Series, low: pd.Series, prev_close: pd.Series) -> pd.Series:
     a = high - low
@@ -102,7 +106,9 @@ def rolling_slope(x: pd.Series, window: int) -> pd.Series:
     slope_t = (MA_t - MA_{t-1}) / MA_{t-1}
     """
     ma = x.rolling(window).mean()
-    return (ma - ma.shift(1)) / ma.shift(1)
+    slope = (ma - ma.shift(1)) / ma.shift(1)
+    # Replace inf and NaN with 0 (no change)
+    return slope.replace([np.inf, -np.inf], 0).fillna(0)
 
 # ----------------------------
 # Core feature engineering
@@ -174,7 +180,8 @@ def engineer_features(df_raw: pd.DataFrame) -> pd.DataFrame:
     for w in ma_windows:
         df[f"ma_{w}"] = df["close"].rolling(w).mean()
         df[f"ema_{w}"] = ema(df["close"], w)
-        df[f"price_ma_{w}_ratio"] = df["close"] / df[f"ma_{w}"]
+        # Safe division: replace inf with 1.0 (price equals MA)
+        df[f"price_ma_{w}_ratio"] = (df["close"] / df[f"ma_{w}"]).replace([np.inf, -np.inf], 1.0).fillna(1.0)
         df[f"ma_{w}_slope"] = rolling_slope(df["close"], w)
 
     # Golden/death-cross style binary signals (interpretable to stakeholders)
@@ -210,13 +217,17 @@ def engineer_features(df_raw: pd.DataFrame) -> pd.DataFrame:
     std20 = df["close"].rolling(20).std()
     df["bb_upper_20"] = mid + 2 * std20
     df["bb_lower_20"] = mid - 2 * std20
-    df["bb_pct_20"]   = (df["close"] - df["bb_lower_20"]) / (df["bb_upper_20"] - df["bb_lower_20"])
+    # Safe division: if bands are equal (std=0), set to 0.5 (middle)
+    band_width = df["bb_upper_20"] - df["bb_lower_20"]
+    df["bb_pct_20"] = ((df["close"] - df["bb_lower_20"]) / (band_width + 1e-10)).clip(0, 1)
 
     # --- Volume features ---
-    df["vol_change"]  = df["volume"].pct_change()
+    # Use pct_change with fillna to handle edge cases, replace inf with 0
+    df["vol_change"]  = df["volume"].pct_change().replace([np.inf, -np.inf], 0).fillna(0)
     df["vol_ma_5"]    = df["volume"].rolling(5).mean()
     df["vol_ma_20"]   = df["volume"].rolling(20).mean()
-    df["vol_ratio_5_20"] = df["vol_ma_5"] / df["vol_ma_20"]
+    # Safe division: replace inf and NaN with 1.0 (neutral ratio)
+    df["vol_ratio_5_20"] = (df["vol_ma_5"] / df["vol_ma_20"]).replace([np.inf, -np.inf], 1.0).fillna(1.0)
 
     df["obv"] = obv(df["close"], df["volume"])
     df["vpt"] = volume_price_trend(df["close"], df["volume"])
