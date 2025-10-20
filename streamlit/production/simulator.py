@@ -89,16 +89,62 @@ def compute_risk(df: pd.DataFrame, metric: str = 'volatility', window: int = 60)
     return results
 
 
-def predict_splg() -> Dict[str, Any]:
+def predict_splg(use_real_model: bool = True) -> Dict[str, Any]:
     """
-    Simulate GBR model prediction for SPLG next-day return.
+    Generate GBR model prediction for SPLG next-day return.
     
-    Uses OpenAI to generate realistic prediction with explanation.
-    Returns structured prediction data.
+    Args:
+        use_real_model: If True, use trained GBR model; if False, use simulated prediction
+    
+    Returns:
+        Dictionary with prediction results:
+        - predicted_return: float
+        - direction: 'up', 'down', or 'neutral'
+        - confidence: float
+        - top_features: list of {name, importance} dicts
     """
-    client = get_openai_client()
+    if use_real_model:
+        try:
+            # Import prediction module
+            import sys
+            from pathlib import Path
+            pred_model_path = Path(__file__).parent / "pred_model"
+            if str(pred_model_path) not in sys.path:
+                sys.path.insert(0, str(pred_model_path))
+            
+            from predict import load_model, predict_with_explanation
+            from get_latest_features import get_latest_features
+            
+            # Load model
+            model_bundle = load_model()
+            
+            # Get latest features
+            latest_features = get_latest_features(1)
+            
+            # Make prediction
+            result = predict_with_explanation(model_bundle, latest_features, top_features=5)
+            
+            # Format for app consumption
+            return {
+                'predicted_return': result['predicted_return'],
+                'direction': result['direction'],
+                'confidence': result['confidence'],
+                'top_features': result['top_features']
+            }
+            
+        except FileNotFoundError:
+            # Model not trained yet, fall back to simulated
+            print("⚠️ Trained model not found. Using simulated prediction. Train model with: python pred_model/scripts/train_gbr_model.py --quick")
+            use_real_model = False
+        except Exception as e:
+            print(f"⚠️ Error loading model: {e}. Using simulated prediction.")
+            use_real_model = False
     
-    prompt = """Generate a realistic stock market prediction for SPLG ETF (S&P 500 Large Cap).
+    if not use_real_model:
+        # Simulated prediction (fallback)
+        client = get_openai_client()
+        
+        prompt = """Generate a realistic stock market prediction for SPLG ETF (S&P 500 Large Cap).
 Return a JSON object with:
 - predicted_return: float between -0.02 and 0.02 (next day % return)
 - direction: "up", "down", or "neutral" (based on return)
@@ -107,41 +153,41 @@ Return a JSON object with:
 
 Make the prediction realistic based on current market conditions. Features should be technical indicators like MA_20, RSI, Volatility_5d, etc."""
 
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}],
-            response_format={"type": "json_object"},
-            temperature=0.7
-        )
-        
-        import json
-        result = json.loads(response.choices[0].message.content)
-        
-        # Ensure direction matches return sign
-        pred_return = result.get('predicted_return', 0)
-        if pred_return > 0.002:
-            result['direction'] = 'up'
-        elif pred_return < -0.002:
-            result['direction'] = 'down'
-        else:
-            result['direction'] = 'neutral'
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"},
+                temperature=0.7
+            )
             
-        return result
-    except Exception as e:
-        # Fallback to static data if API fails
-        return {
-            'predicted_return': 0.0035,
-            'direction': 'up',
-            'confidence': 0.72,
-            'top_features': [
-                {'name': 'MA_20_deviation', 'importance': 0.23},
-                {'name': 'RSI_14', 'importance': 0.18},
-                {'name': 'Volatility_5d', 'importance': 0.15},
-                {'name': 'MACD_signal', 'importance': 0.12},
-                {'name': 'Volume_ratio', 'importance': 0.09}
-            ]
-        }
+            import json
+            result = json.loads(response.choices[0].message.content)
+            
+            # Ensure direction matches return sign
+            pred_return = result.get('predicted_return', 0)
+            if pred_return > 0.002:
+                result['direction'] = 'up'
+            elif pred_return < -0.002:
+                result['direction'] = 'down'
+            else:
+                result['direction'] = 'neutral'
+                
+            return result
+        except Exception as e:
+            # Final fallback to static data
+            return {
+                'predicted_return': 0.0035,
+                'direction': 'up',
+                'confidence': 0.72,
+                'top_features': [
+                    {'name': 'MA_20_deviation', 'importance': 0.23},
+                    {'name': 'RSI_14', 'importance': 0.18},
+                    {'name': 'Volatility_5d', 'importance': 0.15},
+                    {'name': 'MACD_signal', 'importance': 0.12},
+                    {'name': 'Volume_ratio', 'importance': 0.09}
+                ]
+            }
 
 
 def create_price_chart(ticker: str = 'SPLG', days: int = 180) -> go.Figure:
