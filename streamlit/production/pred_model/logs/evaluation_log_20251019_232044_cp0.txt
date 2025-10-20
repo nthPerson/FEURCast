@@ -1,0 +1,43 @@
+2025-10-19 23:20:44,756 - INFO - ================================================================================
+2025-10-19 23:20:44,756 - INFO - FUREcast GBR Model Evaluation
+2025-10-19 23:20:44,757 - INFO - ================================================================================
+2025-10-19 23:20:44,757 - INFO - Loading model artifacts...
+2025-10-19 23:20:44,849 - INFO - Model artifacts loaded successfully
+2025-10-19 23:20:44,849 - INFO - Loading data...
+2025-10-19 23:20:44,906 - INFO - Performing data quality checks...
+2025-10-19 23:20:44,909 - INFO - ✓ Data quality checks passed
+2025-10-19 23:20:44,909 - INFO - Data loaded: Train=3357, Val=719, Test=720
+2025-10-19 23:20:44,916 - INFO - 
+================================================================================
+2025-10-19 23:20:44,916 - INFO - GENERATING VISUALIZATIONS
+2025-10-19 23:20:44,916 - INFO - ================================================================================
+2025-10-19 23:20:44,916 - INFO - Generating training progress plot...
+2025-10-19 23:20:45,203 - INFO - Saved training progress plot to /home/robert/FEURCast/streamlit/production/pred_model/plots/training_progress.png
+2025-10-19 23:20:45,204 - INFO - Generating predictions vs actuals plot...
+2025-10-19 23:20:45,917 - INFO - Saved predictions vs actuals plot to /home/robert/FEURCast/streamlit/production/pred_model/plots/predictions_vs_actuals.png
+2025-10-19 23:20:45,917 - INFO - Generating residuals plot...
+2025-10-19 23:20:46,549 - INFO - Saved residuals plot to /home/robert/FEURCast/streamlit/production/pred_model/plots/residuals.png
+2025-10-19 23:20:46,549 - INFO - Generating feature importance plot...
+2025-10-19 23:20:47,021 - INFO - Saved feature importance plot to /home/robert/FEURCast/streamlit/production/pred_model/plots/feature_importance.png
+2025-10-19 23:20:47,021 - INFO - Generating time series predictions plot...
+2025-10-19 23:20:47,624 - INFO - Saved time series predictions plot to /home/robert/FEURCast/streamlit/production/pred_model/plots/time_series_predictions.png
+2025-10-19 23:20:47,624 - INFO - Generating cumulative returns plot...
+2025-10-19 23:20:48,178 - INFO - Saved cumulative returns plot to /home/robert/FEURCast/streamlit/production/pred_model/plots/cumulative_returns.png
+2025-10-19 23:20:48,178 - INFO - Generating error distribution plot...
+2025-10-19 23:20:48,862 - INFO - Saved error distribution plot to /home/robert/FEURCast/streamlit/production/pred_model/plots/error_distribution.png
+2025-10-19 23:20:48,862 - INFO - 
+================================================================================
+2025-10-19 23:20:48,862 - INFO - FINANCIAL METRICS
+2025-10-19 23:20:48,862 - INFO - ================================================================================
+2025-10-19 23:20:48,862 - INFO - Calculating financial metrics...
+2025-10-19 23:20:48,864 - INFO -   Sharpe Ratio: 4.0723
+2025-10-19 23:20:48,864 - INFO -   Max Drawdown: -2.54%
+2025-10-19 23:20:48,865 - INFO -   Profit Factor: 3.13
+2025-10-19 23:20:48,865 - INFO -   Win Rate: 90.28%
+2025-10-19 23:20:48,868 - INFO - 
+================================================================================
+2025-10-19 23:20:48,868 - INFO - EVALUATION COMPLETE
+2025-10-19 23:20:48,868 - INFO - ================================================================================
+2025-10-19 23:20:48,868 - INFO - All plots saved to: /home/robert/FEURCast/streamlit/production/pred_model/plots
+2025-10-19 23:20:48,868 - INFO - Updated metrics saved to: /home/robert/FEURCast/streamlit/production/pred_model/models/metrics.json
+2025-10-19 23:20:48,868 - INFO - Log file: /home/robert/FEURCast/streamlit/production/pred_model/logs/evaluation_log_20251019_232044.txt
