@@ -177,7 +177,8 @@ def render_prediction_card(prediction):
     with col2:
         st.metric(
             "Confidence Score",
-            f"{confidence:.1%}",
+            confidence, # confidence is currently a string (used to be a float), so just pass as parameter
+            # f"{float(confidence):.1%}",  # original AI-generated confidence was a float
             help="Model's confidence in this prediction"
         )
     
