@@ -123,6 +123,8 @@ def predict_splg(use_real_model: bool = True) -> Dict[str, Any]:
             # Make prediction with CORRECT argument order: (features, model_bundle)
             result = predict_with_explanation(latest_features, model_bundle, top_n=5)
             
+            # DEBUG
+            print(f'USING PREDICTION MODEL (not dummy model)')
             # Format for app consumption
             return {
                 'predicted_return': result['predicted_return'],

@@ -1,0 +1,51 @@
+2025-10-20 14:56:02,818 - INFO - Latest date in dataset: 2025-09-24
+2025-10-20 14:56:02,818 - INFO - Downloading SPLG data from yfinance...
+2025-10-20 14:56:03,550 - INFO - ✓ Fetched 3 new records
+2025-10-20 14:56:03,551 - INFO -   Date range: 2025-10-15 to 2025-10-17
+2025-10-20 15:12:04,680 - INFO - Latest date in dataset: 2025-09-24
+2025-10-20 15:12:04,680 - INFO - Downloading SPLG data from yfinance...
+2025-10-20 15:12:05,186 - INFO - ✓ Fetched 3 new records
+2025-10-20 15:12:05,187 - INFO -   Date range: 2025-10-15 to 2025-10-17
+2025-10-20 15:17:18,071 - INFO - Latest date in dataset: 2025-09-24
+2025-10-20 15:17:18,127 - INFO - Latest date in dataset: 2025-09-24
+2025-10-20 15:17:18,128 - INFO - Fetching data from 2025-09-25 to 2025-10-20
+2025-10-20 15:17:18,128 - INFO - Downloading SPLG data from yfinance...
+2025-10-20 15:17:18,700 - INFO - ✓ Fetched 17 new records
+2025-10-20 15:17:18,701 - INFO -   Date range: 2025-09-25 to 2025-10-17
+2025-10-20 15:18:13,761 - INFO - ======================================================================
+2025-10-20 15:18:13,761 - INFO - SPLG Data Update Check
+2025-10-20 15:18:13,761 - INFO - ======================================================================
+2025-10-20 15:18:13,833 - INFO - Latest date in dataset: 2025-09-24
+2025-10-20 15:18:13,833 - INFO - Fetching data from 2025-09-25 to 2025-10-20
+2025-10-20 15:18:13,833 - INFO - Downloading SPLG data from yfinance...
+2025-10-20 15:18:14,320 - INFO - ✓ Fetched 17 new records
+2025-10-20 15:18:14,321 - INFO -   Date range: 2025-09-25 to 2025-10-17
+2025-10-20 15:18:14,329 - ERROR - Error updating raw dataset: 'date'
+2025-10-20 15:18:14,329 - ERROR - Failed to update raw dataset
+2025-10-20 15:54:08,405 - INFO - ======================================================================
+2025-10-20 15:54:08,406 - INFO - SPLG Data Update Check
+2025-10-20 15:54:08,407 - INFO - ======================================================================
+2025-10-20 15:54:08,592 - INFO - Latest date in dataset: 2025-09-24
+2025-10-20 15:54:08,593 - INFO - Fetching data from 2025-09-25 to 2025-10-20
+2025-10-20 15:54:08,593 - INFO - Downloading SPLG data from yfinance...
+2025-10-20 15:54:09,276 - INFO - ✓ Fetched 17 new records
+2025-10-20 15:54:09,280 - INFO -   Date range: 2025-09-25 to 2025-10-17
+2025-10-20 15:54:09,313 - WARNING - Existing data missing 'date' column, using new data only
+2025-10-20 15:54:09,314 - INFO - Creating new raw dataset with 17 records
+2025-10-20 15:54:09,327 - INFO - ✓ Saved raw dataset to /home/robert/FEURCast/data/SPLG_history_full.csv
+2025-10-20 15:54:09,328 - INFO - ======================================================================
+2025-10-20 15:54:09,328 - INFO - ✓ Data update complete
+2025-10-20 15:54:09,328 - INFO - ======================================================================
+2025-10-20 15:55:31,894 - INFO - ======================================================================
+2025-10-20 15:55:31,895 - INFO - SPLG Data Update Check
+2025-10-20 15:55:31,895 - INFO - ======================================================================
+2025-10-20 15:55:32,077 - INFO - Latest date in dataset: 2025-09-24
+2025-10-20 15:55:32,078 - INFO - Fetching data from 2025-09-25 to 2025-10-20
+2025-10-20 15:55:32,078 - INFO - Downloading SPLG data from yfinance...
+2025-10-20 15:55:32,699 - INFO - ✓ Fetched 17 new records
+2025-10-20 15:55:32,701 - INFO -   Date range: 2025-09-25 to 2025-10-17
+2025-10-20 15:55:32,718 - INFO - Combined dataset: 17 total records
+2025-10-20 15:55:32,725 - INFO - ✓ Saved raw dataset to /home/robert/FEURCast/data/SPLG_history_full.csv
+2025-10-20 15:55:32,726 - INFO - ======================================================================
+2025-10-20 15:55:32,726 - INFO - ✓ Data update complete
+2025-10-20 15:55:32,727 - INFO - ======================================================================
