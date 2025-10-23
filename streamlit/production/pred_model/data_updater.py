@@ -56,12 +56,14 @@ def get_latest_date_in_dataset() -> Optional[datetime]:
     Returns:
         datetime object of latest date, or None if dataset doesn't exist
     """
-    if not DATA_PATH.exists():
-        logger.warning(f"Dataset not found at {DATA_PATH}")
+    # Check RAW data file, not the features file!
+    if not RAW_DATA_PATH.exists():
+        logger.warning(f"Raw dataset not found at {RAW_DATA_PATH}")
         return None
     
     try:
-        df = pd.read_csv(DATA_PATH)
+        df = pd.read_csv(RAW_DATA_PATH)  # Read from RAW_DATA_PATH
+        df.columns = df.columns.str.lower()  # Avoid problems with case sensitivity
         df['date'] = pd.to_datetime(df['date'])
         latest_date = df['date'].max()
         logger.info(f"Latest date in dataset: {latest_date.date()}")
@@ -90,9 +92,10 @@ def fetch_new_splg_data(start_date: Optional[datetime] = None,
     if start_date is None:
         latest_date = get_latest_date_in_dataset()
         if latest_date is None:
-            # No existing dataset - fetch last 20 years
-            start_date = datetime.now() - timedelta(days=365*20)
-            logger.info("No existing dataset - fetching full history (20 years)")
+            logger.error("No existing dataset found. Verify RAW_DATA_PATH in data_updater.py (should point to SPLG_history_full.csv)")
+            # # No existing dataset - fetch last 20 years
+            # start_date = datetime.now() - timedelta(days=365*20)
+            # logger.info("No existing dataset - fetching full history (20 years)")
         else:
             # Fetch from day after latest date
             start_date = latest_date + timedelta(days=1)
@@ -179,6 +182,9 @@ def update_raw_dataset(new_data: pd.DataFrame) -> bool:
         # Load existing raw data if it exists
         if RAW_DATA_PATH.exists():
             existing_data = pd.read_csv(RAW_DATA_PATH)
+
+            # Normalize columns to lowercase to avoid issues with case sensitivity
+            existing_data.columns = existing_data.columns.str.lower()
             
             # Ensure existing data also has datetime
             if 'date' in existing_data.columns:
