@@ -1,8 +1,5 @@
 """
 FUREcast - GBR Demo Application
-
-A skeleton Streamlit UI demonstrating the planned FUREcast architecture
-with simulated GradientBoostingRegressor predictions and LLM orchestration.
 """
 
 import streamlit as st
@@ -10,6 +7,7 @@ import plotly.graph_objects as go
 from datetime import datetime
 import sys
 import os
+import pandas as pd
 
 # Add parent directory to path for .env access
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -22,14 +20,12 @@ from simulator import (
     get_sector_summary,
     create_feature_importance_chart,
     create_sector_comparison_chart,
-    viz_from_spec
 )
 from llm_interface import (
     route_query,
     compose_answer,
     explain_prediction
 )
-
 
 # Page configuration
 st.set_page_config(
@@ -39,230 +35,136 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for better styling
+# Custom CSS
 st.markdown("""
 <style>
-    .main-header {
-        font-size: 2.5rem;
-        font-weight: bold;
-        color: #2E86AB;
-        margin-bottom: 0.5rem;
-    }
-    .sub-header {
-        font-size: 1.2rem;
-        color: #666;
-        margin-bottom: 2rem;
-    }
-    .prediction-card {
-        padding: 1.5rem;
-        border-radius: 10px;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        margin-bottom: 1rem;
-    }
-    .metric-container {
-        background-color: #f0f2f6;
-        padding: 1rem;
-        border-radius: 8px;
-        margin: 0.5rem 0;
-    }
-    .disclaimer {
-        background-color: #fff3cd;
-        border-left: 4px solid #ffc107;
-        padding: 1rem;
-        border-radius: 4px;
-        margin: 1rem 0;
-    }
-    .feature-item {
-        display: flex;
-        justify-content: space-between;
-        padding: 0.5rem;
-        border-bottom: 1px solid #eee;
-    }
+    .main-header { font-size: 2.5rem; font-weight: bold; color: #2E86AB; margin-bottom: 0.5rem; }
+    .sub-header { font-size: 1.2rem; color: #666; margin-bottom: 2rem; }
+    .feature-item { display: flex; justify-content: space-between; padding: 0.5rem; border-bottom: 1px solid #eee; }
+    .disclaimer { background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 1rem; border-radius: 4px; margin: 1rem 0; }
 </style>
 """, unsafe_allow_html=True)
 
 
+# ---------- SESSION STATE ----------
 def initialize_session_state():
-    """Initialize session state variables"""
-    if 'mode' not in st.session_state:
-        st.session_state.mode = 'Lite'
-    if 'prediction_cache' not in st.session_state:
-        st.session_state.prediction_cache = None
-    if 'last_query' not in st.session_state:
-        st.session_state.last_query = ""
+    if 'mode' not in st.session_state: st.session_state.mode = 'Lite'
+    if 'prediction_cache' not in st.session_state: st.session_state.prediction_cache = None
+    if 'last_query' not in st.session_state: st.session_state.last_query = ""
+    if "metric" not in st.session_state: st.session_state.metric = "close"
+    if "start_date" not in st.session_state: st.session_state.start_date = pd.to_datetime("2023-01-01")
+    if "end_date" not in st.session_state: st.session_state.end_date = pd.to_datetime("2025-12-31")
 
 
+# ---------- SIDEBAR ----------
 def render_sidebar():
-    """Render sidebar with mode selection and info"""
     with st.sidebar:
         st.image("https://via.placeholder.com/200x80/2E86AB/FFFFFF?text=FUREcast", use_container_width=True)
-        
         st.markdown("### 🎓 Demo Mode")
-        mode = st.radio(
+        st.session_state.mode = st.radio(
             "Select Mode:",
             options=['Lite', 'Pro'],
+            key="sidebar_mode_radio",  # ✅ unique key
             help="Lite: Basic prediction + charts\nPro: Full LLM interface + all tools"
         )
-        st.session_state.mode = mode
-        
+
+        st.sidebar.header("Chart Filters")
+        st.session_state.metric = st.selectbox(
+            "Select Price Metric",
+            options=["close", "open", "high", "low", "current_price"],
+            index=["close", "open", "high", "low", "current_price"].index(st.session_state.metric),
+            key="metric_selector"
+        )
+        st.session_state.start_date = st.date_input("Start Date", value=st.session_state.start_date, key="start_date_selector")
+        st.session_state.end_date = st.date_input("End Date", value=st.session_state.end_date, key="end_date_selector")
+
         st.markdown("---")
-        
         st.markdown("### ℹ️ About FUREcast")
         st.markdown("""
-        This is a **demo skeleton** showcasing the planned architecture for SPLG ETF analysis using:
-        
-        - **GradientBoostingRegressor** for predictions
-        - **OpenAI LLM** for natural language interface
-        - **Tool orchestration** for dynamic analytics
-        
-        All data and predictions are **simulated** for demonstration purposes.
+        Demo showcasing SPLG ETF analysis with GradientBoostingRegressor and LLM orchestration.
+        All data and predictions are simulated.
         """)
-        
-        st.markdown("---")
-        
-        with st.expander("📊 Data Sources (Simulated)"):
-            st.markdown("""
-            - SPLG historical data (2005-2025)
-            - Sector ETF data (XLK, XLV, XLF, etc.)
-            - Technical indicators (RSI, MACD, MA)
-            - Risk metrics (volatility, Sharpe, drawdown)
-            """)
-        
-        with st.expander("🛠️ Architecture"):
-            st.markdown("""
-            **Pipeline:**
-            1. User Query
-            2. LLM Router (intent classification)
-            3. Tool Planner (execution plan)
-            4. Tool Executor (fetch data/predict)
-            5. Answer Composer (LLM synthesis)
-            6. UI Renderer (Streamlit display)
-            """)
-        
-        st.markdown("---")
-        
-        st.markdown('<div class="disclaimer">⚠️ <strong>Educational Only</strong><br>Not financial advice. Demo purposes only.</div>', 
-                   unsafe_allow_html=True)
+        with st.expander("📊 Data Sources (Simulated)", expanded=False):
+            st.markdown("- SPLG historical data (2005-2025)\n- Sector ETF data\n- Technical indicators\n- Risk metrics")
+        with st.expander("🛠️ Architecture", expanded=False):
+            st.markdown("1. User Query\n2. LLM Router\n3. Tool Planner\n4. Tool Executor\n5. Answer Composer\n6. UI Renderer")
+        st.markdown('<div class="disclaimer">⚠️ <strong>Educational Only</strong><br>Not financial advice.</div>', unsafe_allow_html=True)
 
 
+# ---------- LITE MODE ----------
 def render_prediction_card(prediction):
-    """Render the main GBR prediction card"""
     direction = prediction['direction']
     pred_return = prediction['predicted_return'] * 100
     confidence = prediction['confidence']
-    
-    # Determine color based on direction
-    if direction == 'up':
-        color = '#28a745'
-        emoji = '📈'
-    elif direction == 'down':
-        color = '#dc3545'
-        emoji = '📉'
-    else:
-        color = '#ffc107'
-        emoji = '➡️'
-    
-    col1, col2, col3 = st.columns([2, 1, 1])
-    
+    if direction == 'up': color, emoji = '#28a745', '📈'
+    elif direction == 'down': color, emoji = '#dc3545', '📉'
+    else: color, emoji = '#ffc107', '➡️'
+
+    col1, col2, col3 = st.columns([2,1,1])
     with col1:
-        st.markdown(f"""
-        <div style='background-color: {color}; padding: 1.5rem; border-radius: 10px; color: white;'>
-            <h2 style='margin: 0; color: white;'>{emoji} Model Prediction</h2>
-            <h1 style='margin: 0.5rem 0; color: white;'>{direction.upper()}</h1>
-            <p style='margin: 0; font-size: 1.2rem;'>Expected Return: {pred_return:+.2f}%</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col2:
-        st.metric(
-            "Confidence Score",
-            f"{confidence:.1%}",
-            help="Model's confidence in this prediction"
-        )
-    
-    with col3:
-        st.metric(
-            "Timeframe",
-            "Next Day",
-            help="Prediction horizon"
-        )
+        st.markdown(f"<div style='background-color:{color}; padding:1.5rem; border-radius:10px; color:white;'>"
+                    f"<h2>{emoji} Model Prediction</h2>"
+                    f"<h1>{direction.upper()}</h1>"
+                    f"<p>Expected Return: {pred_return:+.2f}%</p></div>", unsafe_allow_html=True)
+    with col2: st.metric("Confidence Score", f"{confidence:.1%}")
+    with col3: st.metric("Timeframe", "Next Day")
 
 
 def render_feature_importance(features):
-    """Render feature importance section"""
     st.markdown("#### 🔍 Top Model Features")
-    
-    col1, col2 = st.columns([3, 2])
-    
+    col1, col2 = st.columns([3,2])
     with col1:
-        # Show chart
         fig = create_feature_importance_chart(features)
         st.plotly_chart(fig, use_container_width=True)
-    
     with col2:
-        st.markdown("**Feature Importance Rankings:**")
         for i, feat in enumerate(features, 1):
-            st.markdown(f"""
-            <div class='feature-item'>
-                <span><strong>{i}.</strong> {feat['name']}</span>
-                <span><strong>{feat['importance']:.2%}</strong></span>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        # Get explanation
-        with st.spinner("Generating explanation..."):
-            try:
-                explanation = explain_prediction(st.session_state.prediction_cache)
-                st.markdown(f"**Interpretation:** {explanation}")
-            except:
-                st.markdown("*Feature importance shows which technical indicators most influenced this prediction.*")
+            st.markdown(f"<div class='feature-item'><span><strong>{i}.</strong> {feat['name']}</span>"
+                        f"<span><strong>{feat['importance']:.2%}</strong></span></div>", unsafe_allow_html=True)
+        try:
+            st.markdown(f"**Interpretation:** {explain_prediction(st.session_state.prediction_cache)}")
+        except:
+            st.markdown("*Feature importance shows key indicators influencing prediction.*")
 
 
 def render_lite_mode():
-    """Render Lite mode interface"""
     st.markdown('<p class="main-header">📈 FUREcast SPLG Predictor</p>', unsafe_allow_html=True)
     st.markdown('<p class="sub-header">Educational GBR-Based Market Analytics</p>', unsafe_allow_html=True)
     
-    # Get or generate prediction
-    if st.session_state.prediction_cache is None or st.button("🔄 Refresh Prediction"):
-        with st.spinner("Generating prediction..."):
-            st.session_state.prediction_cache = predict_splg()
-    
+    if st.session_state.prediction_cache is None or st.button("🔄 Refresh Prediction", key="refresh_lite"):
+        st.session_state.prediction_cache = predict_splg()
     prediction = st.session_state.prediction_cache
-    
-    # Main prediction card
+
     render_prediction_card(prediction)
-    
     st.markdown("---")
-    
-    # Feature importance
     render_feature_importance(prediction['top_features'])
-    
     st.markdown("---")
-    
-    # Price chart
-    st.markdown("#### 📊 SPLG Historical Price")
+
+    metric = st.session_state.metric
+    start_date = st.session_state.start_date
+    end_date = st.session_state.end_date
+    if start_date > end_date:
+        st.error("🚫 Start date must be before end date.")
+        return
+
+    st.markdown(f"#### 📊 {metric.capitalize()} Price Chart")
     with st.spinner("Loading chart..."):
-        fig = create_price_chart('SPLG', 180)
-        st.plotly_chart(fig, use_container_width=True)
-    
-    st.markdown("---")
-    
-    # Educational note
+        try:
+            fig = create_price_chart(metric, pd.to_datetime(start_date), pd.to_datetime(end_date))
+            st.plotly_chart(fig, config={"responsive": True}, use_container_width=True)
+        except Exception as e:
+            st.error(f"❌ Chart failed to render: {e}")
+
     st.info("""
     **💡 How to Use This Tool:**
-    
-    1. Review the model's prediction (up/down/neutral)
-    2. Check the confidence score - higher is more certain
-    3. Examine which features drove the prediction
-    4. Compare with recent price trends in the chart
-    5. Remember: This is a learning tool, not investment advice!
-    
-    *Switch to **Pro Mode** in the sidebar for natural language queries and advanced analytics.*
+    1. Review model prediction
+    2. Check confidence score
+    3. Examine feature influence
+    4. Compare with recent price trends
+    *Educational use only.*
     """)
 
 
+# ---------- PRO MODE ----------
 def render_pro_mode():
     """Render Pro mode interface with LLM query capabilities"""
     st.markdown('<p class="main-header">🚀 FUREcast Pro Analytics</p>', unsafe_allow_html=True)
@@ -284,7 +186,7 @@ def render_pro_mode():
         with col3:
             st.metric("Confidence", f"{prediction['confidence']:.1%}")
         with col4:
-            if st.button("🔄 Refresh"):
+            if st.button("🔄 Refresh", key="pro_refresh_button"):
                 st.session_state.prediction_cache = predict_splg()
                 st.rerun()
     
@@ -306,7 +208,7 @@ def render_pro_mode():
         cols = st.columns(2)
         for i, example in enumerate(examples):
             with cols[i % 2]:
-                if st.button(example, key=f"example_{i}", use_container_width=True):
+                if st.button(example, key=f"example_query_button_{i}", use_container_width=True):
                     st.session_state.last_query = example
     
     # Query input
@@ -314,14 +216,15 @@ def render_pro_mode():
         "Your Question:",
         value=st.session_state.last_query,
         placeholder="e.g., Which sectors have the lowest volatility?",
-        label_visibility="collapsed"
+        label_visibility="collapsed",
+        key="query_input_box"
     )
     
     col1, col2 = st.columns([1, 5])
     with col1:
-        submit = st.button("🔍 Analyze", type="primary", use_container_width=True)
+        submit = st.button("🔍 Analyze", type="primary", use_container_width=True, key="analyze_button")
     with col2:
-        if st.button("Clear", use_container_width=True):
+        if st.button("Clear", use_container_width=True, key="clear_button"):
             st.session_state.last_query = ""
             st.rerun()
     
@@ -341,8 +244,6 @@ def render_pro_mode():
         # Execute tools based on plan
         with st.spinner("📊 Executing analysis..."):
             tool_results = {}
-            
-            # Simulate tool execution based on intent
             intent = plan.get('intent', 'general_question')
             
             if intent == 'market_outlook' or 'predict' in intent:
@@ -392,19 +293,23 @@ def render_pro_mode():
             # Show summary table
             summary_df = get_sector_summary()
             if not summary_df.empty:
-                with st.expander("📊 Sector Summary Table"):
+                with st.expander("📊 Sector Summary Table", expanded=False):
                     st.dataframe(summary_df, use_container_width=True, hide_index=True)
+        
         elif 'sector' in query.lower() and 'risk' in query.lower():
             fig = create_sector_risk_treemap()
             st.plotly_chart(fig, use_container_width=True)
+        
         elif 'compare' in query.lower() or 'performance' in query.lower():
             # Extract sectors from query (simplified)
             sectors = ['Technology', 'Utilities', 'Healthcare']
             fig = create_sector_comparison_chart(sectors)
             st.plotly_chart(fig, use_container_width=True)
+        
         elif 'feature' in query.lower() or 'influence' in query.lower():
             fig = create_feature_importance_chart(prediction['top_features'])
             st.plotly_chart(fig, use_container_width=True)
+        
         else:
             # Default to price chart
             fig = create_price_chart('SPLG', 180)
@@ -429,19 +334,15 @@ def render_pro_mode():
             st.markdown("**SPLG Holdings Drill-Down** - Explore sectors and individual holdings")
             st.caption("Size = SPLG Weight (%). Click on sectors to drill down into holdings. Hover for detailed KPIs.")
             
-            # Color metric selector
             color_option = st.selectbox(
                 "Color by:",
                 ["DailyChangePct", "PE", "Beta", "DividendYield"],
                 index=0,
-                key="treemap_color"
+                key="holdings_treemap_color"
             )
-            
-            # Create and display the treemap
             fig = create_sector_holdings_treemap(color_metric=color_option)
             st.plotly_chart(fig, use_container_width=True)
             
-            # Show sector summary table
             st.markdown("**Sector Summary (Weighted by SPLG)**")
             summary_df = get_sector_summary()
             if not summary_df.empty:
@@ -449,7 +350,10 @@ def render_pro_mode():
         
         with tab3:
             st.markdown("**SPLG Historical Performance**")
-            fig = create_price_chart('SPLG', 365)
+            metric = st.session_state.metric
+            start_date = st.session_state.start_date
+            end_date = st.session_state.end_date
+            fig = create_price_chart(metric, pd.to_datetime(start_date), pd.to_datetime(end_date))
             st.plotly_chart(fig, use_container_width=True)
         
         with tab4:
@@ -466,24 +370,22 @@ def render_pro_mode():
                     st.info("Technical indicators drive the model's predictions by capturing market momentum, trends, and volatility patterns.")
 
 
+
+# ---------- MAIN ----------
 def main():
-    """Main application entry point"""
     initialize_session_state()
     render_sidebar()
-    
-    # Render appropriate mode
     if st.session_state.mode == 'Lite':
         render_lite_mode()
     else:
         render_pro_mode()
-    
-    # Footer
+
     st.markdown("---")
     st.markdown("""
-    <div style='text-align: center; color: #666; padding: 2rem;'>
+    <div style='text-align:center; color:#666; padding:2rem;'>
         <p><strong>FUREcast GBR Demo</strong> | Educational Analytics Platform</p>
-        <p style='font-size: 0.9rem;'>Built with Streamlit, OpenAI, and Plotly | Demo Version</p>
-        <p style='font-size: 0.8rem;'>⚠️ All data simulated for demonstration purposes</p>
+        <p style='font-size:0.9rem;'>Built with Streamlit, OpenAI, and Plotly | Demo Version</p>
+        <p style='font-size:0.8rem;'>⚠️ All data simulated for demonstration purposes</p>
     </div>
     """, unsafe_allow_html=True)
 
