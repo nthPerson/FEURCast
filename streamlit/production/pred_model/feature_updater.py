@@ -63,7 +63,7 @@ def rebuild_features_from_scratch() -> bool:
     
     try:
         # Import the feature building module
-        sys.path.insert(0, str(FEATURE_ENGINEERING_PATH))
+        # sys.path.insert(0, str(FEATURE_ENGINEERING_PATH))  # Created a copy of the wrangling build_splg_features in pred_model directory for easier maintenance
         from build_splg_features import main as build_features
         
         # Run the feature engineering
