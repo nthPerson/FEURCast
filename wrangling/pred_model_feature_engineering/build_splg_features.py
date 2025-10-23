@@ -277,8 +277,8 @@ def main(argv: List[str]) -> int:
     # args = parse_args(argv)  # using hard-coded path instead
 
     #### Input and output paths ####
-    SPLG_DATA_IN = "/home/robert/FEURCast/data/SPLG_history_full.csv"
-    # SPLG_DATA_IN = "../../data/SPLG_history_full.csv"
+    # SPLG_DATA_IN = "/home/robert/FEURCast/data/SPLG_history_full.csv"
+    SPLG_DATA_IN = "../../data/SPLG_history_full.csv"
     DATA_OUT_DIR = "data_out"
     os.makedirs(DATA_OUT_DIR, exist_ok=True)
     OUT_CSV_PATH = os.path.join(DATA_OUT_DIR, "rich_features_SPLG_history_full.csv")
