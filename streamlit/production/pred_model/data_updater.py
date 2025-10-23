@@ -190,13 +190,17 @@ def update_raw_dataset(new_data: pd.DataFrame) -> bool:
             if 'date' in existing_data.columns:
                 existing_data['date'] = pd.to_datetime(existing_data['date'])
             else:
-                logger.warning("Existing data missing 'date' column, using new data only")
-                combined = new_data
-                logger.info(f"Creating new raw dataset with {len(combined)} records")
-                RAW_DATA_PATH.parent.mkdir(parents=True, exist_ok=True)
-                combined.to_csv(RAW_DATA_PATH, index=False)
-                logger.info(f"✓ Saved raw dataset to {RAW_DATA_PATH}")
-                return True
+                logger.error("Could not find 'date' column in existing data, NO DATA WAS UPDATED!")
+                return False
+            
+                # NOTE the code below updates the dataset even if it can't find the original data, overwriting the original dataset with the newly fetched data (aka not what we want)
+                # logger.warning("Existing data missing 'date' column, using new data only")
+                # combined = new_data
+                # logger.info(f"Creating new raw dataset with {len(combined)} records")
+                # RAW_DATA_PATH.parent.mkdir(parents=True, exist_ok=True)
+                # combined.to_csv(RAW_DATA_PATH, index=False)
+                # logger.info(f"✓ Saved raw dataset to {RAW_DATA_PATH}")
+                # return True
             
             # Combine with new data
             combined = pd.concat([existing_data, new_data], ignore_index=True)
