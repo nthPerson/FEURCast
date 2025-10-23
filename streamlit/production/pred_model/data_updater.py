@@ -62,9 +62,9 @@ def get_latest_date_in_dataset() -> Optional[datetime]:
         return None
     
     try:
-        df = pd.read_csv(RAW_DATA_PATH)  # Read from RAW_DATA_PATH
-        df.columns = df.columns.str.lower()  # Avoid problems with case sensitivity
-        df['date'] = pd.to_datetime(df['date'])
+        df = pd.read_csv(RAW_DATA_PATH)
+        # Parse with UTC to avoid timezone warnings, then convert to timezone-naive
+        df['date'] = pd.to_datetime(df['date'], utc=True).dt.tz_localize(None)
         latest_date = df['date'].max()
         logger.info(f"Latest date in dataset: {latest_date.date()}")
         return latest_date
@@ -93,9 +93,7 @@ def fetch_new_splg_data(start_date: Optional[datetime] = None,
         latest_date = get_latest_date_in_dataset()
         if latest_date is None:
             logger.error("No existing dataset found. Verify RAW_DATA_PATH in data_updater.py (should point to SPLG_history_full.csv)")
-            # # No existing dataset - fetch last 20 years
-            # start_date = datetime.now() - timedelta(days=365*20)
-            # logger.info("No existing dataset - fetching full history (20 years)")
+            return None
         else:
             # Fetch from day after latest date
             start_date = latest_date + timedelta(days=1)
@@ -131,21 +129,25 @@ def fetch_new_splg_data(start_date: Optional[datetime] = None,
             'Volume': 'volume'
         })
         
-        # Add required columns
+        # Get additional info from ticker
+        info = splg.info
+        pe_ratio_value = info.get('trailingPE', 0.0) if info.get('trailingPE') else 0.0
+        yield_value = info.get('dividendYield', 0.0) * 100 if info.get('dividendYield') else 0.0
+        beta_value = info.get('beta', 0.0) if info.get('beta') else 0.0
+        
+        # Add metadata columns with consistent naming (underscores only)
         hist['company_name'] = 'SPDR Portfolio S&P 500 ETF'
         hist['ticker'] = 'SPLG'
         hist['current_price'] = hist['close']  # Use close as current price
+        hist['pe_ratio'] = pe_ratio_value
+        hist['yield'] = yield_value
+        hist['beta'] = beta_value
         
-        # Get additional info
-        info = splg.info
-        hist['pe_ratio'] = info.get('trailingPE', 0.0)
-        hist['yield'] = info.get('dividendYield', 0.0) * 100 if info.get('dividendYield') else 0.0
-        
-        # Select and order columns
+        # Select and order columns to match CSV convention exactly
         columns = [
             'date', 'company_name', 'ticker', 'current_price',
             'open', 'close', 'high', 'low', 'volume',
-            'pe_ratio', 'yield'
+            'pe_ratio', 'yield', 'beta'
         ]
         
         hist = hist[columns]
@@ -177,36 +179,54 @@ def update_raw_dataset(new_data: pd.DataFrame) -> bool:
             return False
         
         new_data = new_data.copy()
-        new_data['date'] = pd.to_datetime(new_data['date'])
+        # Convert to timezone-naive datetime
+        new_data['date'] = pd.to_datetime(new_data['date']).dt.tz_localize(None)
         
         # Load existing raw data if it exists
         if RAW_DATA_PATH.exists():
             existing_data = pd.read_csv(RAW_DATA_PATH)
-
-            # Normalize columns to lowercase to avoid issues with case sensitivity
-            existing_data.columns = existing_data.columns.str.lower()
             
             # Ensure existing data also has datetime
             if 'date' in existing_data.columns:
-                existing_data['date'] = pd.to_datetime(existing_data['date'])
+                # Convert to timezone-naive datetime
+                existing_data['date'] = pd.to_datetime(existing_data['date'], utc=True).dt.tz_localize(None)
             else:
                 logger.error("Could not find 'date' column in existing data, NO DATA WAS UPDATED!")
                 return False
             
-                # NOTE the code below updates the dataset even if it can't find the original data, overwriting the original dataset with the newly fetched data (aka not what we want)
-                # logger.warning("Existing data missing 'date' column, using new data only")
-                # combined = new_data
-                # logger.info(f"Creating new raw dataset with {len(combined)} records")
-                # RAW_DATA_PATH.parent.mkdir(parents=True, exist_ok=True)
-                # combined.to_csv(RAW_DATA_PATH, index=False)
-                # logger.info(f"✓ Saved raw dataset to {RAW_DATA_PATH}")
-                # return True
+            # Ensure column alignment - use only columns that exist in both datasets
+            common_columns = list(set(existing_data.columns) & set(new_data.columns))
+            
+            # Make sure we have the essential columns
+            required_columns = ['date', 'company_name', 'ticker', 'current_price', 
+                              'open', 'close', 'high', 'low', 'volume', 
+                              'pe_ratio', 'yield', 'beta']
+            
+            # Check if all required columns are present
+            missing_in_new = set(required_columns) - set(new_data.columns)
+            missing_in_existing = set(required_columns) - set(existing_data.columns)
+            
+            if missing_in_new:
+                logger.warning(f"New data missing columns: {missing_in_new}")
+            if missing_in_existing:
+                logger.warning(f"Existing data missing columns: {missing_in_existing}")
             
             # Combine with new data
             combined = pd.concat([existing_data, new_data], ignore_index=True)
             
             # Remove duplicates (keep latest)
             combined = combined.sort_values('date').drop_duplicates(subset='date', keep='last')
+            
+            # Ensure column order matches the convention
+            final_columns = [
+                'date', 'company_name', 'ticker', 'current_price',
+                'open', 'close', 'high', 'low', 'volume',
+                'pe_ratio', 'yield', 'beta'
+            ]
+            
+            # Only select columns that exist
+            final_columns = [col for col in final_columns if col in combined.columns]
+            combined = combined[final_columns]
             
             logger.info(f"Combined dataset: {len(combined)} total records")
         else:
