@@ -59,7 +59,7 @@ def initialize_session_state():
 # ---------- SIDEBAR ----------
 def render_sidebar():
     with st.sidebar:
-        st.image("https://via.placeholder.com/200x80/2E86AB/FFFFFF?text=FUREcast", use_container_width=True)
+        st.image("https://upload.wikimedia.org/wikipedia/commons/c/c8/FURECast_SPLG.png", use_container_width=True)
         st.markdown("### 🎓 Demo Mode")
         st.session_state.mode = st.radio(
             "Select Mode:",
