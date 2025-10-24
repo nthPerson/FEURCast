@@ -51,9 +51,22 @@ def initialize_session_state():
     if 'mode' not in st.session_state: st.session_state.mode = 'Lite'
     if 'prediction_cache' not in st.session_state: st.session_state.prediction_cache = None
     if 'last_query' not in st.session_state: st.session_state.last_query = ""
+    # Metric display names to DataFrame column mapping
+    if 'metric_mapping' not in st.session_state:
+        st.session_state.metric_mapping = {
+            "Closing": "close",
+            "Opening": "open",
+            "Daily High": "high",
+            "Daily Low": "low",
+            "Daily Current": "current_price"
+        }
     if "metric" not in st.session_state: st.session_state.metric = "Closing"
-    if "start_date" not in st.session_state: st.session_state.start_date = pd.to_datetime("2023-01-01")
-    if "end_date" not in st.session_state: st.session_state.end_date = pd.to_datetime("2025-12-31")
+    if "start_date" not in st.session_state: 
+        st.session_state.start_date = pd.to_datetime("2023-01-01")
+    if "end_date" not in st.session_state: 
+        st.session_state.end_date = pd.to_datetime("2025-09-24")  # Maximum date in our dataset
+    if "max_dataset_date" not in st.session_state:
+        st.session_state.max_dataset_date = pd.to_datetime("2025-09-24")
 
 
 # ---------- SIDEBAR ----------
@@ -75,8 +88,29 @@ def render_sidebar():
             index=["Closing", "Opening", "Daily High", "Daily Low", "Daily Current"].index(st.session_state.metric),
             key="metric_selector"
         )
-        st.session_state.start_date = st.date_input("Start Date", value=st.session_state.start_date, key="start_date_selector")
-        st.session_state.end_date = st.date_input("End Date", value=st.session_state.end_date, key="end_date_selector")
+        # Define the maximum available date from our dataset
+        MAX_DATASET_DATE = pd.to_datetime("2025-09-24")
+        
+        # Convert Timestamp to date for comparison and display
+        current_end_date = st.session_state.end_date.date() if isinstance(st.session_state.end_date, pd.Timestamp) else st.session_state.end_date
+        current_start_date = st.session_state.start_date.date() if isinstance(st.session_state.start_date, pd.Timestamp) else st.session_state.start_date
+        
+        st.session_state.start_date = st.date_input(
+            "Start Date",
+            value=current_start_date,
+            key="start_date_selector",
+            max_value=MAX_DATASET_DATE.date()
+        )
+        st.session_state.end_date = st.date_input(
+            "End Date",
+            value=min(current_end_date, MAX_DATASET_DATE.date()),
+            key="end_date_selector",
+            max_value=MAX_DATASET_DATE.date()
+        )
+        
+        # Convert back to Timestamp for consistency
+        st.session_state.start_date = pd.to_datetime(st.session_state.start_date)
+        st.session_state.end_date = pd.to_datetime(st.session_state.end_date)
 
         st.markdown("---")
         st.markdown("### ℹ️ About FUREcast")
@@ -142,14 +176,23 @@ def render_lite_mode():
     metric = st.session_state.metric
     start_date = st.session_state.start_date
     end_date = st.session_state.end_date
+    max_date = st.session_state.max_dataset_date
+    
     if start_date > end_date:
         st.error("🚫 Start date must be before end date.")
         return
+        
+    # Ensure end date doesn't exceed dataset limit for price charts
+    if end_date > max_date:
+        end_date = max_date
+        st.warning(f"⚠️ End date adjusted to maximum available date: {max_date.date()}")
 
-    st.markdown(f"#### 📊 {metric.capitalize()} Price Chart")
+    st.markdown(f"#### 📊 {metric} Price Chart")
     with st.spinner("Loading chart..."):
         try:
-            fig = create_price_chart(metric, pd.to_datetime(start_date), pd.to_datetime(end_date))
+            # Map display name to DataFrame column name
+            df_column = st.session_state.metric_mapping[metric]
+            fig = create_price_chart(df_column, pd.to_datetime(start_date), pd.to_datetime(end_date))
             st.plotly_chart(fig, config={"responsive": True}, use_container_width=True)
         except Exception as e:
             st.error(f"❌ Chart failed to render: {e}")
@@ -353,7 +396,9 @@ def render_pro_mode():
             metric = st.session_state.metric
             start_date = st.session_state.start_date
             end_date = st.session_state.end_date
-            fig = create_price_chart(metric, pd.to_datetime(start_date), pd.to_datetime(end_date))
+            # Map display name to DataFrame column name
+            df_column = st.session_state.metric_mapping[metric]
+            fig = create_price_chart(df_column, pd.to_datetime(start_date), pd.to_datetime(end_date))
             st.plotly_chart(fig, use_container_width=True)
         
         with tab4:

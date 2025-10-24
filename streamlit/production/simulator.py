@@ -142,21 +142,56 @@ Make the prediction realistic based on current market conditions. Features shoul
             ]
         }
 def create_price_chart(metric, start_date, end_date):
+    # Mapping between display names and DataFrame columns
+    metric_mapping = {
+        "Closing": "close",
+        "Opening": "open",
+        "Daily High": "high",
+        "Daily Low": "low",
+        "Daily Current": "current_price"
+    }
+    
+    # Get the actual column name from the mapping, or use the metric as-is if not in mapping
+    df_column = metric_mapping.get(metric, metric)
+    
     df = pd.read_csv("../../data/rich_features_SPLG_history_full.csv")
     print("CSV loaded:", df.head())  # Debugging line
 
     df['date'] = pd.to_datetime(df['date'])
+    
+    # Ensure all dates are Timestamps
+    start_date = pd.to_datetime(start_date)
+    end_date = pd.to_datetime(end_date)
+    
+    # Get the maximum date from the dataset
+    max_available_date = df['date'].max()
+    
+    # Adjust end_date if it exceeds the maximum available date
+    if end_date > max_available_date:
+        print(f"Warning: Requested end date {end_date.date()} exceeds available data. Using maximum available date: {max_available_date.date()}")
+        end_date = max_available_date
+    
     df = df[(df['date'] >= start_date) & (df['date'] <= end_date)]
 
     if df.empty:
         raise ValueError("No data available for the selected date range.")
 
+    # Use the display name for the title and label, or map the column name to a proper display name
+    display_names = {
+        "close": "Closing",
+        "open": "Opening",
+        "high": "Daily High",
+        "low": "Daily Low",
+        "current_price": "Daily Current"
+    }
+    display_name = metric if metric in metric_mapping else display_names.get(metric, metric.capitalize())
+    
     fig = px.line(
         df,
         x='date',
-        y=metric,
-        title=f"{metric.capitalize()} Price from {start_date.date()} to {end_date.date()}",
-        labels={'date': 'Date', metric: f'{metric.capitalize()} Price ($)'}
+        y=df_column,
+        title=f"{display_name} Price from {start_date.date()} to {end_date.date()}",
+        labels={'date': 'Date', df_column: f'{display_name} Price ($)'}
     )
     fig.update_layout(template='plotly_white')
     return fig
