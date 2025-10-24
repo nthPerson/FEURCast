@@ -155,88 +155,94 @@ Return a JSON object with:
 
 Make the prediction realistic based on current market conditions. Features should be technical indicators like MA_20, RSI, Volatility_5d, etc."""
 
-        try:
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[{"role": "user", "content": prompt}],
-                response_format={"type": "json_object"},
-                temperature=0.7
-            )
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+            temperature=0.7
+        )
+        
+        import json
+        result = json.loads(response.choices[0].message.content)
+        
+        # Ensure direction matches return sign
+        pred_return = result.get('predicted_return', 0)
+        if pred_return > 0.002:
+            result['direction'] = 'up'
+        elif pred_return < -0.002:
+            result['direction'] = 'down'
+        else:
+            result['direction'] = 'neutral'
             
-            import json
-            result = json.loads(response.choices[0].message.content)
-            
-            # Ensure direction matches return sign
-            pred_return = result.get('predicted_return', 0)
-            if pred_return > 0.002:
-                result['direction'] = 'up'
-            elif pred_return < -0.002:
-                result['direction'] = 'down'
-            else:
-                result['direction'] = 'neutral'
-                
-            return result
-        except Exception as e:
-            print(f"⚠️ Error with LLM fallback: {e}")
-            # Final fallback to static data
-            return {
-                'predicted_return': 0.0035,
-                'direction': 'up',
-                'confidence': 0.72,
-                'top_features': [
-                    {'name': 'MA_20_deviation', 'importance': 0.23},
-                    {'name': 'RSI_14', 'importance': 0.18},
-                    {'name': 'Volatility_5d', 'importance': 0.15},
-                    {'name': 'MACD_signal', 'importance': 0.12},
-                    {'name': 'Volume_ratio', 'importance': 0.09}
-                ]
-            }
+        return result
+    except Exception as e:
+        # Fallback to static data if API fails
+        return {
+            'predicted_return': 0.0035,
+            'direction': 'up',
+            'confidence': 0.72,
+            'top_features': [
+                {'name': 'MA_20_deviation', 'importance': 0.23},
+                {'name': 'RSI_14', 'importance': 0.18},
+                {'name': 'Volatility_5d', 'importance': 0.15},
+                {'name': 'MACD_signal', 'importance': 0.12},
+                {'name': 'Volume_ratio', 'importance': 0.09}
+            ]
+        }
+def create_price_chart(metric, start_date, end_date):
+    # Mapping between display names and DataFrame columns
+    metric_mapping = {
+        "Closing": "close",
+        "Opening": "open",
+        "Daily High": "high",
+        "Daily Low": "low",
+        "Daily Current": "current_price"
+    }
+    
+    # Get the actual column name from the mapping, or use the metric as-is if not in mapping (for backward compatibility)
+    df_column = metric_mapping.get(metric, metric)
+    
+    df = pd.read_csv("../../data/rich_features_SPLG_history_full.csv")
+    print("CSV loaded:", df.head())  # Debugging line
 
+    df['date'] = pd.to_datetime(df['date'])
+    
+    # Ensure all dates are Timestamps
+    start_date = pd.to_datetime(start_date)
+    end_date = pd.to_datetime(end_date)
+    
+    # Get the maximum date from the dataset
+    max_available_date = df['date'].max()
+    
+    # Adjust end_date if it exceeds the maximum available date
+    if end_date > max_available_date:
+        print(f"Warning: Requested end date {end_date.date()} exceeds available data. Using maximum available date: {max_available_date.date()}")
+        end_date = max_available_date
+    
+    df = df[(df['date'] >= start_date) & (df['date'] <= end_date)]
 
-def create_price_chart(ticker: str = 'SPLG', days: int = 180) -> go.Figure:
-    """Create SPLG price chart with moving averages"""
-    end_date = datetime.now()
-    start_date = end_date - timedelta(days=days)
+    if df.empty:
+        raise ValueError("No data available for the selected date range.")
+
+    # Use the display name for the title and label, or map the column name to a proper display name
+    display_names = {
+        "close": "Closing",
+        "open": "Opening",
+        "high": "Daily High",
+        "low": "Daily Low",
+        "current_price": "Daily Current"
+    }
+    display_name = metric if metric in metric_mapping else display_names.get(metric, metric.capitalize())
     
-    df = fetch_prices([ticker], start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))
-    df = df.sort_values('date')
-    
-    # Calculate moving averages
-    df['MA_20'] = df['close'].rolling(20).mean()
-    df['MA_50'] = df['close'].rolling(50).mean()
-    
-    fig = go.Figure()
-    
-    fig.add_trace(go.Scatter(
-        x=df['date'], y=df['close'],
-        mode='lines',
-        name='Close Price',
-        line=dict(color='#2E86AB', width=2)
-    ))
-    
-    fig.add_trace(go.Scatter(
-        x=df['date'], y=df['MA_20'],
-        mode='lines',
-        name='20-Day MA',
-        line=dict(color='#A23B72', width=1, dash='dash')
-    ))
-    
-    fig.add_trace(go.Scatter(
-        x=df['date'], y=df['MA_50'],
-        mode='lines',
-        name='50-Day MA',
-        line=dict(color='#F18F01', width=1, dash='dot')
-    ))
-    
-    fig.update_layout(
-        title=f'{ticker} Price with Moving Averages',
-        xaxis_title='Date',
-        yaxis_title='Price ($)',
-        hovermode='x unified',
-        template='plotly_white',
-        height=400
+    fig = px.line(
+        df,
+        x='date',
+        y=df_column,
+        title=f"{display_name} Price from {start_date.date()} to {end_date.date()}",
+        labels={'date': 'Date', df_column: f'{display_name} Price ($)'}
     )
-    
+    fig.update_layout(template='plotly_white')
     return fig
 
 
