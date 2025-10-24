@@ -151,7 +151,7 @@ def create_price_chart(metric, start_date, end_date):
         "Daily Current": "current_price"
     }
     
-    # Get the actual column name from the mapping, or use the metric as-is if not in mapping
+    # Get the actual column name from the mapping, or use the metric as-is if not in mapping (for backward compatibility)
     df_column = metric_mapping.get(metric, metric)
     
     df = pd.read_csv("../../data/rich_features_SPLG_history_full.csv")

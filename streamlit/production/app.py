@@ -88,10 +88,8 @@ def render_sidebar():
             index=["Closing", "Opening", "Daily High", "Daily Low", "Daily Current"].index(st.session_state.metric),
             key="metric_selector"
         )
-        # Define the maximum available date from our dataset
-        MAX_DATASET_DATE = pd.to_datetime("2025-09-24")
-        
-        # Convert Timestamp to date for comparison and display
+    # Define the maximum available date from our dataset (last available date in historical data)
+    MAX_DATASET_DATE = pd.to_datetime("2025-09-24")        # Convert Timestamp to date for comparison and display
         current_end_date = st.session_state.end_date.date() if isinstance(st.session_state.end_date, pd.Timestamp) else st.session_state.end_date
         current_start_date = st.session_state.start_date.date() if isinstance(st.session_state.start_date, pd.Timestamp) else st.session_state.start_date
         
