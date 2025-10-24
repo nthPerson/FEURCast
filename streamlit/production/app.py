@@ -51,7 +51,7 @@ def initialize_session_state():
     if 'mode' not in st.session_state: st.session_state.mode = 'Lite'
     if 'prediction_cache' not in st.session_state: st.session_state.prediction_cache = None
     if 'last_query' not in st.session_state: st.session_state.last_query = ""
-    if "metric" not in st.session_state: st.session_state.metric = "close"
+    if "metric" not in st.session_state: st.session_state.metric = "Closing"
     if "start_date" not in st.session_state: st.session_state.start_date = pd.to_datetime("2023-01-01")
     if "end_date" not in st.session_state: st.session_state.end_date = pd.to_datetime("2025-12-31")
 
@@ -71,8 +71,8 @@ def render_sidebar():
         st.sidebar.header("Chart Filters")
         st.session_state.metric = st.selectbox(
             "Select Price Metric",
-            options=["close", "open", "high", "low", "current_price"],
-            index=["close", "open", "high", "low", "current_price"].index(st.session_state.metric),
+            options=["Closing", "Opening", "Daily High", "Daily Low", "Daily Current"],
+            index=["Closing", "Opening", "Daily High", "Daily Low", "Daily Current"].index(st.session_state.metric),
             key="metric_selector"
         )
         st.session_state.start_date = st.date_input("Start Date", value=st.session_state.start_date, key="start_date_selector")
