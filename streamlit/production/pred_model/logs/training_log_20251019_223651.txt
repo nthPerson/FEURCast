@@ -1,0 +1,49 @@
+2025-10-19 22:36:51,698 - INFO - ================================================================================
+2025-10-19 22:36:51,699 - INFO - FUREcast GBR Model Training Pipeline
+2025-10-19 22:36:51,699 - INFO - ================================================================================
+2025-10-19 22:36:51,699 - INFO - Log file: /home/robert/FEURCast/streamlit/production/pred_model/logs/training_log_20251019_223651.txt
+2025-10-19 22:36:51,699 - INFO - Random seed: 42
+2025-10-19 22:36:51,699 - INFO - Loading data from /home/robert/FEURCast/data/rich_features_SPLG_history_full.csv
+2025-10-19 22:36:51,773 - INFO - Loaded 4748 records with 115 columns
+2025-10-19 22:36:51,777 - INFO - Date range: 2006-09-01 00:00:00 to 2025-09-24 00:00:00
+2025-10-19 22:36:51,777 - INFO - Feature columns: 110
+2025-10-19 22:36:51,777 - INFO - Target: target_return_t1 (next-day percentage return)
+2025-10-19 22:36:51,782 - INFO - Final dataset: 4748 samples, 110 features
+2025-10-19 22:36:51,782 - INFO - Target statistics: mean=0.000393, std=0.011825, min=-0.116761, max=0.095256
+2025-10-19 22:36:51,783 - INFO - Creating time-based train/val/test splits (70%/15%/15%)
+2025-10-19 22:36:51,783 - INFO - Train: 2006-09-01 00:00:00 to 2020-01-23 00:00:00 (3323 samples)
+2025-10-19 22:36:51,784 - INFO - Val:   2020-01-24 00:00:00 to 2022-11-17 00:00:00 (712 samples)
+2025-10-19 22:36:51,784 - INFO - Test:  2022-11-18 00:00:00 to 2025-09-24 00:00:00 (713 samples)
+2025-10-19 22:36:51,784 - INFO - Scaling features with StandardScaler
+2025-10-19 22:36:51,786 - ERROR - Training failed with error: Input X contains infinity or a value too large for dtype('float64').
+Traceback (most recent call last):
+  File "/home/robert/FEURCast/streamlit/production/pred_model/scripts/train_gbr_model.py", line 390, in main
+    scale_features(X_train, X_val, X_test)
+  File "/home/robert/FEURCast/streamlit/production/pred_model/scripts/train_gbr_model.py", line 157, in scale_features
+    X_train_scaled = scaler.fit_transform(X_train)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/robert/anaconda3/envs/feurcast-env/lib/python3.11/site-packages/sklearn/utils/_set_output.py", line 316, in wrapped
+    data_to_wrap = f(self, X, *args, **kwargs)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/robert/anaconda3/envs/feurcast-env/lib/python3.11/site-packages/sklearn/base.py", line 894, in fit_transform
+    return self.fit(X, **fit_params).transform(X)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/robert/anaconda3/envs/feurcast-env/lib/python3.11/site-packages/sklearn/preprocessing/_data.py", line 907, in fit
+    return self.partial_fit(X, y, sample_weight)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/robert/anaconda3/envs/feurcast-env/lib/python3.11/site-packages/sklearn/base.py", line 1365, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/robert/anaconda3/envs/feurcast-env/lib/python3.11/site-packages/sklearn/preprocessing/_data.py", line 943, in partial_fit
+    X = validate_data(
+        ^^^^^^^^^^^^^^
+  File "/home/robert/anaconda3/envs/feurcast-env/lib/python3.11/site-packages/sklearn/utils/validation.py", line 2954, in validate_data
+    out = check_array(X, input_name="X", **check_params)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/robert/anaconda3/envs/feurcast-env/lib/python3.11/site-packages/sklearn/utils/validation.py", line 1105, in check_array
+    _assert_all_finite(
+  File "/home/robert/anaconda3/envs/feurcast-env/lib/python3.11/site-packages/sklearn/utils/validation.py", line 120, in _assert_all_finite
+    _assert_all_finite_element_wise(
+  File "/home/robert/anaconda3/envs/feurcast-env/lib/python3.11/site-packages/sklearn/utils/validation.py", line 169, in _assert_all_finite_element_wise
+    raise ValueError(msg_err)
+ValueError: Input X contains infinity or a value too large for dtype('float64').

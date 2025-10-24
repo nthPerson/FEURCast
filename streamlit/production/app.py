@@ -134,12 +134,28 @@ def render_prediction_card(prediction):
 
     col1, col2, col3 = st.columns([2,1,1])
     with col1:
-        st.markdown(f"<div style='background-color:{color}; padding:1.5rem; border-radius:10px; color:white;'>"
-                    f"<h2>{emoji} Model Prediction</h2>"
-                    f"<h1>{direction.upper()}</h1>"
-                    f"<p>Expected Return: {pred_return:+.2f}%</p></div>", unsafe_allow_html=True)
-    with col2: st.metric("Confidence Score", f"{confidence:.1%}")
-    with col3: st.metric("Timeframe", "Next Day")
+        st.markdown(f"""
+        <div style='background-color: {color}; padding: 1.5rem; border-radius: 10px; color: white;'>
+            <h2 style='margin: 0; color: white;'>{emoji} Model Prediction</h2>
+            <h1 style='margin: 0.5rem 0; color: white;'>{direction.upper()}</h1>
+            <p style='margin: 0; font-size: 1.2rem;'>Expected Return: {pred_return:+.2f}%</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.metric(
+            "Confidence Score",
+            confidence, # confidence is currently a string (used to be a float), so just pass as parameter
+            # f"{float(confidence):.1%}",  # original AI-generated confidence was a float
+            help="Model's confidence in this prediction"
+        )
+    
+    with col3:
+        st.metric(
+            "Timeframe",
+            "Next Day",
+            help="Prediction horizon"
+        )
 
 
 def render_feature_importance(features):

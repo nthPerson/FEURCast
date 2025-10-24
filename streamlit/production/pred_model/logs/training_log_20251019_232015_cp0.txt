@@ -1,0 +1,85 @@
+2025-10-19 23:20:15,167 - INFO - ================================================================================
+2025-10-19 23:20:15,167 - INFO - FUREcast GBR Model Training Pipeline
+2025-10-19 23:20:15,167 - INFO - ================================================================================
+2025-10-19 23:20:15,167 - INFO - Log file: /home/robert/FEURCast/streamlit/production/pred_model/logs/training_log_20251019_232015.txt
+2025-10-19 23:20:15,167 - INFO - Random seed: 42
+2025-10-19 23:20:15,167 - INFO - Loading data from /home/robert/FEURCast/data/rich_features_SPLG_history_full.csv
+2025-10-19 23:20:15,224 - INFO - Loaded 4796 records with 115 columns
+2025-10-19 23:20:15,228 - INFO - Date range: 2006-08-31 00:00:00 to 2025-09-24 00:00:00
+2025-10-19 23:20:15,228 - INFO - Feature columns: 110
+2025-10-19 23:20:15,228 - INFO - Target: target_return_t1 (next-day percentage return)
+2025-10-19 23:20:15,233 - INFO - Performing data quality checks...
+2025-10-19 23:20:15,235 - INFO - Checking for extreme outliers...
+2025-10-19 23:20:15,278 - WARNING - Found extreme outliers in 2 features
+2025-10-19 23:20:15,278 - WARNING -   high_low_pct: 0 low, 1 high
+2025-10-19 23:20:15,278 - WARNING -   vol_change: 0 low, 5 high
+2025-10-19 23:20:15,279 - INFO - 
+Final cleaned dataset: 4796 samples, 110 features
+2025-10-19 23:20:15,279 - INFO - Target statistics:
+2025-10-19 23:20:15,279 - INFO -   Mean:   0.000414
+2025-10-19 23:20:15,279 - INFO -   Std:    0.011832
+2025-10-19 23:20:15,279 - INFO -   Min:    -0.116761
+2025-10-19 23:20:15,279 - INFO -   Max:    0.095256
+2025-10-19 23:20:15,279 - INFO -   Median: 0.000319
+2025-10-19 23:20:15,282 - INFO - ✓ Data quality checks passed
+2025-10-19 23:20:15,283 - INFO - Creating time-based train/val/test splits (70%/15%/15%)
+2025-10-19 23:20:15,283 - INFO - Train: 2006-08-31 00:00:00 to 2020-01-02 00:00:00 (3357 samples)
+2025-10-19 23:20:15,283 - INFO - Val:   2020-01-03 00:00:00 to 2022-11-08 00:00:00 (719 samples)
+2025-10-19 23:20:15,284 - INFO - Test:  2022-11-09 00:00:00 to 2025-09-24 00:00:00 (720 samples)
+2025-10-19 23:20:15,284 - INFO - Scaling features with StandardScaler
+2025-10-19 23:20:15,291 - INFO - Feature scaling complete
+2025-10-19 23:20:15,291 - INFO - Training with recommended hyperparameters (quick mode)...
+2025-10-19 23:20:15,453 - INFO - Quick training complete
+2025-10-19 23:20:15,453 - INFO - 
+================================================================================
+2025-10-19 23:20:15,453 - INFO - MODEL EVALUATION
+2025-10-19 23:20:15,453 - INFO - ================================================================================
+2025-10-19 23:20:15,456 - INFO - 
+Training Set Performance:
+2025-10-19 23:20:15,456 - INFO -   MSE:  0.00011214
+2025-10-19 23:20:15,456 - INFO -   RMSE: 0.010590
+2025-10-19 23:20:15,456 - INFO -   MAE:  0.006941
+2025-10-19 23:20:15,456 - INFO -   R²:   0.094557
+2025-10-19 23:20:15,456 - INFO -   MAPE: 22283912.01%
+2025-10-19 23:20:15,456 - INFO -   Directional Accuracy: 52.13%
+2025-10-19 23:20:15,458 - INFO - 
+Validation Set Performance:
+2025-10-19 23:20:15,458 - INFO -   MSE:  0.00025886
+2025-10-19 23:20:15,458 - INFO -   RMSE: 0.016089
+2025-10-19 23:20:15,458 - INFO -   MAE:  0.010619
+2025-10-19 23:20:15,458 - INFO -   R²:   -0.007303
+2025-10-19 23:20:15,458 - INFO -   MAPE: 4377725.82%
+2025-10-19 23:20:15,458 - INFO -   Directional Accuracy: 51.46%
+2025-10-19 23:20:15,460 - INFO - 
+Test Set Performance:
+2025-10-19 23:20:15,460 - INFO -   MSE:  0.00009865
+2025-10-19 23:20:15,460 - INFO -   RMSE: 0.009932
+2025-10-19 23:20:15,460 - INFO -   MAE:  0.006817
+2025-10-19 23:20:15,460 - INFO -   R²:   -0.006690
+2025-10-19 23:20:15,460 - INFO -   MAPE: 5058310.46%
+2025-10-19 23:20:15,460 - INFO -   Directional Accuracy: 54.31%
+2025-10-19 23:20:15,460 - INFO - Saving model artifacts...
+2025-10-19 23:20:15,462 - INFO - Saved model to /home/robert/FEURCast/streamlit/production/pred_model/models/gbr_model.pkl
+2025-10-19 23:20:15,462 - INFO - Saved scaler to /home/robert/FEURCast/streamlit/production/pred_model/models/scaler.pkl
+2025-10-19 23:20:15,462 - INFO - Saved feature names to /home/robert/FEURCast/streamlit/production/pred_model/models/feature_names.pkl
+2025-10-19 23:20:15,465 - INFO - Saved metrics to /home/robert/FEURCast/streamlit/production/pred_model/models/metrics.json
+2025-10-19 23:20:15,467 - INFO - Saved feature importance to /home/robert/FEURCast/streamlit/production/pred_model/models/feature_importance.csv
+2025-10-19 23:20:15,471 - INFO - Saved model metadata to /home/robert/FEURCast/streamlit/production/pred_model/models/model_metadata.json
+2025-10-19 23:20:15,471 - INFO - All artifacts saved successfully
+2025-10-19 23:20:15,471 - INFO - 
+================================================================================
+2025-10-19 23:20:15,471 - INFO - TRAINING COMPLETE
+2025-10-19 23:20:15,471 - INFO - ================================================================================
+2025-10-19 23:20:15,471 - INFO - Final Test R² Score: -0.006690
+2025-10-19 23:20:15,471 - INFO - Final Test RMSE: 0.009932
+2025-10-19 23:20:15,471 - INFO - Final Test Directional Accuracy: 54.31%
+2025-10-19 23:20:15,471 - INFO - Top 5 Features:
+2025-10-19 23:20:15,473 - INFO -   price_ma_50_ratio: 0.0873
+2025-10-19 23:20:15,473 - INFO -   rsi_14: 0.0560
+2025-10-19 23:20:15,473 - INFO -   ma_10_slope: 0.0464
+2025-10-19 23:20:15,473 - INFO -   lag_1_volume: 0.0421
+2025-10-19 23:20:15,473 - INFO -   lag_3_return: 0.0401
+2025-10-19 23:20:15,473 - INFO - 
+All artifacts saved to:
+2025-10-19 23:20:15,473 - INFO -   Models: /home/robert/FEURCast/streamlit/production/pred_model/models
+2025-10-19 23:20:15,473 - INFO -   Logs: /home/robert/FEURCast/streamlit/production/pred_model/logs/training_log_20251019_232015.txt

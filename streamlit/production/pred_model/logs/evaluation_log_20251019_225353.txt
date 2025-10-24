@@ -1,0 +1,28 @@
+2025-10-19 22:53:53,980 - INFO - ================================================================================
+2025-10-19 22:53:53,980 - INFO - FUREcast GBR Model Evaluation
+2025-10-19 22:53:53,980 - INFO - ================================================================================
+2025-10-19 22:53:53,980 - INFO - Loading model artifacts...
+2025-10-19 22:53:54,058 - INFO - Model artifacts loaded successfully
+2025-10-19 22:53:54,058 - INFO - Loading data...
+2025-10-19 22:53:54,116 - INFO - Data loaded: Train=3323, Val=712, Test=713
+2025-10-19 22:53:54,118 - ERROR - Evaluation failed with error: Input X contains infinity or a value too large for dtype('float64').
+Traceback (most recent call last):
+  File "/home/robert/FEURCast/streamlit/production/pred_model/scripts/evaluate_model.py", line 396, in main
+    X_train_scaled = scaler.transform(X_train)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/robert/anaconda3/envs/feurcast-env/lib/python3.11/site-packages/sklearn/utils/_set_output.py", line 316, in wrapped
+    data_to_wrap = f(self, X, *args, **kwargs)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/robert/anaconda3/envs/feurcast-env/lib/python3.11/site-packages/sklearn/preprocessing/_data.py", line 1075, in transform
+    X = validate_data(
+        ^^^^^^^^^^^^^^
+  File "/home/robert/anaconda3/envs/feurcast-env/lib/python3.11/site-packages/sklearn/utils/validation.py", line 2954, in validate_data
+    out = check_array(X, input_name="X", **check_params)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/robert/anaconda3/envs/feurcast-env/lib/python3.11/site-packages/sklearn/utils/validation.py", line 1105, in check_array
+    _assert_all_finite(
+  File "/home/robert/anaconda3/envs/feurcast-env/lib/python3.11/site-packages/sklearn/utils/validation.py", line 120, in _assert_all_finite
+    _assert_all_finite_element_wise(
+  File "/home/robert/anaconda3/envs/feurcast-env/lib/python3.11/site-packages/sklearn/utils/validation.py", line 169, in _assert_all_finite_element_wise
+    raise ValueError(msg_err)
+ValueError: Input X contains infinity or a value too large for dtype('float64').

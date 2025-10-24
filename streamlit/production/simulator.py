@@ -88,16 +88,65 @@ def compute_risk(df: pd.DataFrame, metric: str = 'volatility', window: int = 60)
     return results
 
 
-def predict_splg() -> Dict[str, Any]:
+def predict_splg(use_real_model: bool = True) -> Dict[str, Any]:
     """
-    Simulate GBR model prediction for SPLG next-day return.
+    Generate GBR model prediction for SPLG next-day return.
     
-    Uses OpenAI to generate realistic prediction with explanation.
-    Returns structured prediction data.
+    Args:
+        use_real_model: If True, use trained GBR model; if False, use simulated prediction
+    
+    Returns:
+        Dictionary with prediction results:
+        - predicted_return: float
+        - direction: 'up', 'down', or 'neutral'
+        - confidence: float
+        - top_features: list of {name, importance} dicts
     """
-    client = get_openai_client()
+    if use_real_model:
+        try:
+            # Import prediction module
+            import sys
+            from pathlib import Path
+            pred_model_path = Path(__file__).parent / "pred_model"
+            if str(pred_model_path) not in sys.path:
+                sys.path.insert(0, str(pred_model_path))
+            
+            from predict import load_model, predict_with_explanation  # type: ignore
+            from get_latest_features import get_latest_features  # type: ignore
+            
+            # Load model
+            model_bundle = load_model()
+            
+            # Get latest features
+            latest_features = get_latest_features(1)
+            
+            # Make prediction with CORRECT argument order: (features, model_bundle)
+            result = predict_with_explanation(latest_features, model_bundle, top_n=5)
+            
+            # DEBUG
+            print(f'USING PREDICTION MODEL (not dummy model)')
+            # Format for app consumption
+            return {
+                'predicted_return': result['predicted_return'],
+                'direction': result['direction'],
+                'confidence': result['confidence'],
+                'top_features': result['top_features']
+            }
+            
+        except FileNotFoundError as e:
+            # Model not trained yet, fall back to simulated
+            print(f"⚠️ Trained model not found: {e}")
+            print("   To train: cd pred_model && python scripts/train_gbr_model.py --quick")
+            use_real_model = False
+        except Exception as e:
+            print(f"⚠️ Error loading model: {e}")
+            use_real_model = False
     
-    prompt = """Generate a realistic stock market prediction for SPLG ETF (S&P 500 Large Cap).
+    if not use_real_model:
+        # Simulated prediction (fallback)
+        client = get_openai_client()
+        
+        prompt = """Generate a realistic stock market prediction for SPLG ETF (S&P 500 Large Cap).
 Return a JSON object with:
 - predicted_return: float between -0.02 and 0.02 (next day % return)
 - direction: "up", "down", or "neutral" (based on return)

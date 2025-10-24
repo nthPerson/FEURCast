@@ -1,0 +1,20 @@
+2025-10-20 15:54:09,329 - INFO - ======================================================================
+2025-10-20 15:54:09,329 - INFO - Feature Engineering - Full Rebuild
+2025-10-20 15:54:09,329 - INFO - ======================================================================
+2025-10-20 15:54:09,346 - INFO - Running feature engineering pipeline...
+2025-10-20 15:54:09,346 - ERROR - Error during feature engineering: main() missing 1 required positional argument: 'argv'
+2025-10-20 15:54:09,348 - ERROR - Traceback (most recent call last):
+  File "/home/robert/FEURCast/streamlit/production/pred_model/feature_updater.py", line 71, in rebuild_features_from_scratch
+    build_features()
+TypeError: main() missing 1 required positional argument: 'argv'
+
+2025-10-20 15:55:32,728 - INFO - ======================================================================
+2025-10-20 15:55:32,729 - INFO - Feature Engineering - Full Rebuild
+2025-10-20 15:55:32,729 - INFO - ======================================================================
+2025-10-20 15:55:32,734 - INFO - Running feature engineering pipeline...
+2025-10-20 15:55:33,114 - INFO - ✓ Generated features: 4796 rows, 115 columns
+2025-10-20 15:55:33,686 - INFO - ✓ Saved features to /home/robert/FEURCast/data/rich_features_SPLG_history_full.csv
+2025-10-20 15:55:33,697 - INFO - ✓ No infinite values detected
+2025-10-20 15:55:33,698 - INFO - ======================================================================
+2025-10-20 15:55:33,698 - INFO - ✓ Feature engineering complete
+2025-10-20 15:55:33,698 - INFO - ======================================================================
