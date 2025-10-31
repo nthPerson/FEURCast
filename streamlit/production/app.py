@@ -244,7 +244,8 @@ def render_pro_mode():
         with col2:
             st.metric("Expected Return", f"{prediction['predicted_return']*100:+.2f}%")
         with col3:
-            st.metric("Confidence", f"{prediction['confidence']:.1%}")
+            st.metric("Confidence", f"{prediction['confidence']}")
+            # st.metric("Confidence", f"{prediction['confidence']:.1%}")
         with col4:
             if st.button("🔄 Refresh", key="pro_refresh_button"):
                 st.session_state.prediction_cache = predict_splg()
