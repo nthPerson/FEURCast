@@ -23,68 +23,98 @@ def get_openai_client():
     api_key = os.getenv('OPENAI_API_KEY')
     return OpenAI(api_key=api_key)
 
+def fetch_prices(tickers: List[str], start: str = None, end: str = None) -> pd.DataFrame:
+    """
+    Load SPLG historical data from rich_features_SPLG_history.csv.
+    Filters by ticker(s) and optional date range.
+    """
+    # Construct path to your data file
+    csv_path = os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'rich_features_SPLG_history_full.csv')
 
-def fetch_prices(tickers: List[str], start: str, end: str) -> pd.DataFrame:
-    """
-    Simulate fetching historical price data for given tickers.
-    
-    In production, this would call yfinance or Alpha Vantage.
-    """
-    start_date = datetime.strptime(start, '%Y-%m-%d')
-    end_date = datetime.strptime(end, '%Y-%m-%d')
-    
-    dates = pd.date_range(start_date, end_date, freq='B')  # Business days
-    
-    data = []
-    for ticker in tickers:
-        # Simulate realistic price movement
-        np.random.seed(hash(ticker) % 2**32)  # Consistent per ticker
-        base_price = np.random.uniform(50, 500)
-        returns = np.random.normal(0.0005, 0.015, len(dates))  # Daily returns
-        prices = base_price * np.exp(np.cumsum(returns))
-        
-        for date, price in zip(dates, prices):
-            data.append({
-                'ticker': ticker,
-                'date': date,
-                'open': price * (1 + np.random.uniform(-0.01, 0.01)),
-                'high': price * (1 + np.random.uniform(0, 0.02)),
-                'low': price * (1 - np.random.uniform(0, 0.02)),
-                'close': price,
-                'volume': int(np.random.uniform(1e6, 10e6))
-            })
-    
-    return pd.DataFrame(data)
+    # Load CSV
+    df = pd.read_csv(csv_path)
+
+    # Normalize column names
+    df.columns = df.columns.str.strip().str.lower().str.replace(r'[\s\-]+', '_', regex=True)
+
+    # Ensure expected columns exist
+    rename_map = {
+        'date': 'date',
+        'ticker': 'ticker',
+        'close': 'close',
+        'open': 'open',
+        'high': 'high',
+        'low': 'low',
+        'volume': 'volume'
+    }
+    df = df.rename(columns=rename_map)
+
+    # Parse dates
+    df['date'] = pd.to_datetime(df['date'])
+
+    # Filter by tickers
+    if tickers:
+        df = df[df['ticker'].isin(tickers)]
+
+    # Filter by date range
+    if start:
+        df = df[df['date'] >= pd.to_datetime(start)]
+    if end:
+        df = df[df['date'] <= pd.to_datetime(end)]
+
+    # Sort by date
+    df = df.sort_values(['ticker', 'date']).reset_index(drop=True)
+
+    return df
 
 
-def compute_risk(df: pd.DataFrame, metric: str = 'volatility', window: int = 60) -> Dict[str, float]:
+def compute_risk(metric: str = 'volatility', window: int = 60) -> Dict[str, float]:
     """
-    Simulate risk metric calculations.
-    
-    Returns a dictionary of ticker -> metric value.
+    Compute risk metrics for SPLG using data from rich_features_SPLG_history.csv.
+    Supported metrics: 'volatility', 'sharpe', 'drawdown'.
     """
+    # Load SPLG historical data
+    csv_path = os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'rich_features_SPLG_history.csv')
+    df = pd.read_csv(csv_path)
+
+    # Normalize column names
+    df.columns = df.columns.str.strip().str.lower().str.replace(r'[\s\-]+', '_', regex=True)
+    df = df.rename(columns={
+        'date': 'date',
+        'ticker': 'ticker',
+        'close': 'close'
+    })
+
+    # Parse dates and filter to SPLG
+    df['date'] = pd.to_datetime(df['date'])
+    df = df[df['ticker'].str.upper() == 'SPLG'].sort_values('date')
+
+    # Calculate daily returns
+    df['return'] = df['close'].pct_change().dropna()
+
     results = {}
-    
-    for ticker in df['ticker'].unique():
-        ticker_data = df[df['ticker'] == ticker].sort_values('date')
-        returns = ticker_data['close'].pct_change().dropna()
-        
-        if metric == 'volatility':
-            # Annualized volatility
-            vol = returns.tail(window).std() * np.sqrt(252)
-            results[ticker] = vol
-        elif metric == 'sharpe':
-            # Simplified Sharpe (assuming 2% risk-free rate)
-            excess_return = returns.tail(window).mean() * 252 - 0.02
-            vol = returns.tail(window).std() * np.sqrt(252)
-            results[ticker] = excess_return / vol if vol > 0 else 0
-        elif metric == 'drawdown':
-            # Max drawdown
-            cumulative = (1 + returns).cumprod()
-            running_max = cumulative.expanding().max()
-            drawdown = ((cumulative - running_max) / running_max).min()
-            results[ticker] = abs(drawdown)
-    
+
+    # Compute selected risk metric
+    if metric == 'volatility':
+        vol = df['return'].tail(window).std() * np.sqrt(252)
+        results['SPLG'] = vol
+
+    elif metric == 'sharpe':
+        # Simplified Sharpe ratio assuming 2% annual risk-free rate
+        mean_return = df['return'].tail(window).mean() * 252
+        vol = df['return'].tail(window).std() * np.sqrt(252)
+        rf = 0.02
+        results['SPLG'] = (mean_return - rf) / vol if vol > 0 else 0
+
+    elif metric == 'drawdown':
+        cumulative = (1 + df['return']).cumprod()
+        running_max = cumulative.expanding().max()
+        drawdown = ((cumulative - running_max) / running_max).min()
+        results['SPLG'] = abs(drawdown)
+
+    else:
+        raise ValueError("Invalid metric. Use 'volatility', 'sharpe', or 'drawdown'.")
+
     return results
 
 
@@ -191,46 +221,64 @@ def create_price_chart(ticker: str = 'SPLG', days: int = 180) -> go.Figure:
 
 
 def create_sector_risk_treemap() -> go.Figure:
-    """Create treemap showing sector risk levels"""
-    sectors = {
-        'Technology': {'size': 28.5, 'volatility': 0.185},
-        'Healthcare': {'size': 13.2, 'volatility': 0.142},
-        'Financials': {'size': 13.8, 'volatility': 0.208},
-        'Consumer Discretionary': {'size': 10.3, 'volatility': 0.195},
-        'Industrials': {'size': 8.7, 'volatility': 0.178},
-        'Communications': {'size': 8.4, 'volatility': 0.165},
-        'Consumer Staples': {'size': 6.8, 'volatility': 0.118},
-        'Energy': {'size': 4.2, 'volatility': 0.295},
-        'Utilities': {'size': 2.9, 'volatility': 0.138},
-        'Real Estate': {'size': 2.4, 'volatility': 0.225},
-        'Materials': {'size': 2.8, 'volatility': 0.201}
-    }
-    
-    df = pd.DataFrame([
-        {'sector': k, 'size': v['size'], 'volatility': v['volatility']}
-        for k, v in sectors.items()
-    ])
-    
+    """
+    Create treemap showing sector risk levels using holdings-with-sector.csv.
+    - 'weight' is used as size.
+    - 'volatility' is used as color.
+    - Automatically groups by sector.
+    """
+
+    csv_path = os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'holdings-with-sectors.csv')
+
+    # --- Load and clean data ---
+    try:
+        df = pd.read_csv(csv_path)
+    except FileNotFoundError:
+        raise FileNotFoundError(f"CSV not found at: {csv_path}")
+
+    # Normalize column names
+    df.columns = df.columns.str.strip().str.lower().str.replace(r'[\s\-]+', '_', regex=True)
+
+    # Check expected columns
+    required_cols = {'sector', 'weight'}
+    missing = required_cols - set(df.columns)
+    if missing:
+        raise ValueError(f"Missing required columns in CSV: {missing}")
+
+    # Optional: volatility may be estimated if not present
+    if 'volatility' not in df.columns:
+        # Estimate volatility using rolling variance of weights (simple proxy)
+        df['volatility'] = df['weight'].rolling(window=5, min_periods=1).std().fillna(df['weight'].std())
+
+    # --- Aggregate by sector ---
+    df_sector = (
+        df.groupby('sector', as_index=False)
+          .agg({'weight': 'sum', 'volatility': 'mean'})
+          .rename(columns={'weight': 'size'})
+    )
+
+    # --- Build treemap ---
     fig = px.treemap(
-        df,
+        df_sector,
         path=['sector'],
         values='size',
         color='volatility',
         color_continuous_scale='RdYlGn_r',
-        title='SPLG Sector Risk Map (by Volatility)'
+        title='SPLG Sector Weight / Risk-Volatility Map'
     )
-    
+
+    # --- Styling ---
     fig.update_traces(
         textinfo='label+value',
         textposition='middle center',
         textfont=dict(size=14)
     )
-    
+
     fig.update_layout(
         height=500,
         coloraxis_colorbar=dict(title="Volatility")
     )
-    
+
     return fig
 
 
