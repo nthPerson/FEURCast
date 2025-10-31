@@ -128,9 +128,12 @@ def render_prediction_card(prediction):
     direction = prediction['direction']
     pred_return = prediction['predicted_return'] * 100
     confidence = prediction['confidence']
-    if direction == 'up': color, emoji = '#28a745', '📈'
-    elif direction == 'down': color, emoji = '#dc3545', '📉'
-    else: color, emoji = '#ffc107', '➡️'
+    if direction == 'up': 
+        color, emoji = '#28a745', '📈'
+    elif direction == 'down': 
+        color, emoji = '#dc3545', '📉'
+    else: 
+        color, emoji = '#ffc107', '➡️'
 
     col1, col2, col3 = st.columns([2,1,1])
     with col1:
