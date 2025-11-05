@@ -190,7 +190,115 @@ Make the prediction realistic based on current market conditions. Features shoul
                 {'name': 'Volume_ratio', 'importance': 0.09}
             ]
         }
+def merge_timeline_into_prices(df_prices: pd.DataFrame, timeline_path: str) -> pd.DataFrame:
+    """
+    Merge timeline events into price DataFrame.
+
+    For each date in the prices DataFrame, this function will attach any events
+    found in the timeline file. Multiple events on the same day will be
+    aggregated into a single string (newline-separated). The returned DataFrame
+    will have new optional columns: 'timeline_events' (str) and
+    'timeline_event_count' (int).
+
+    Args:
+        df_prices: DataFrame with a 'date' column (datetime64)
+        timeline_path: absolute path to the Excel file containing timeline
+
+    Returns:
+        DataFrame with merged timeline columns. If timeline file is missing or
+        empty, returns the original df_prices unchanged.
+    """
+    try:
+        tl = pd.read_excel(timeline_path)
+    except FileNotFoundError:
+        # No timeline available — return prices untouched
+        return df_prices
+    except Exception:
+        # If excel can't be read for any reason, return prices untouched
+        return df_prices
+
+    if tl is None or tl.empty:
+        return df_prices
+
+    # Robust column detection
+    col_candidates = {c.lower(): c for c in tl.columns}
+    # date column
+    date_col = None
+    for name in ('date', 'day', 'event date', 'event_date'):
+        if name in col_candidates:
+            date_col = col_candidates[name]
+            break
+    if date_col is None:
+        # Try to find any datetime-like column
+        for c in tl.columns:
+            if np.issubdtype(tl[c].dtype, np.datetime64):
+                date_col = c
+                break
+    if date_col is None:
+        # Can't find a date column; give up
+        return df_prices
+
+    # Event description column
+    event_col = None
+    for name in ('event', 'description', 'event description', 'details'):
+        if name in col_candidates:
+            event_col = col_candidates[name]
+            break
+    # Category and impact
+    category_col = None
+    impact_col = None
+    for name in ('category', 'type'):
+        if name in col_candidates:
+            category_col = col_candidates[name]
+            break
+    for name in ('impact', 'market impact'):
+        if name in col_candidates:
+            impact_col = col_candidates[name]
+            break
+
+    # Normalize timeline date column
+    tl[date_col] = pd.to_datetime(tl[date_col]).dt.normalize()
+
+    # Build a single textual description per event row
+    def make_event_row(r):
+        parts = []
+        if event_col and pd.notna(r.get(event_col, None)):
+            parts.append(str(r[event_col]))
+        if category_col and pd.notna(r.get(category_col, None)):
+            parts.append(f"Category: {r[category_col]}")
+        if impact_col and pd.notna(r.get(impact_col, None)):
+            parts.append(f"Impact: {r[impact_col]}")
+        return " — ".join(parts) if parts else None
+
+    tl['__event_text'] = tl.apply(make_event_row, axis=1)
+
+    # Aggregate multiple events per day
+    agg = tl.groupby(date_col)['__event_text'].apply(lambda rows: "\n".join([r for r in rows if r]))
+    agg = agg.reset_index().rename(columns={date_col: 'date', '__event_text': 'timeline_events'})
+    agg['date'] = pd.to_datetime(agg['date']).dt.normalize()
+    agg['timeline_event_count'] = agg['timeline_events'].str.count('\n').fillna(0).astype(int) + (agg['timeline_events'] != '').astype(int)
+
+    # Normalize price df date
+    df = df_prices.copy()
+    df['date'] = pd.to_datetime(df['date']).dt.normalize()
+
+    # Merge
+    merged = pd.merge(df, agg, on='date', how='left')
+
+    # Fill NaNs
+    merged['timeline_events'] = merged['timeline_events'].fillna("")
+    merged['timeline_event_count'] = merged.get('timeline_event_count', 0).fillna(0).astype(int)
+
+    return merged
+
+
 def create_price_chart(metric, start_date, end_date):
+    """
+    Create a Plotly line chart for a given price metric and overlay timeline events.
+
+    This function resolves file paths relative to this module. If the primary
+    CSV is missing it falls back to simulated prices (using fetch_prices).
+    """
     # Mapping between display names and DataFrame columns
     metric_mapping = {
         "Closing": "close",
@@ -199,33 +307,44 @@ def create_price_chart(metric, start_date, end_date):
         "Daily Low": "low",
         "Daily Current": "current_price"
     }
-    
-    # Get the actual column name from the mapping, or use the metric as-is if not in mapping (for backward compatibility)
-    df_column = metric_mapping.get(metric, metric)
-    
-    df = pd.read_csv("../../data/rich_features_SPLG_history_full.csv")
-    print("CSV loaded:", df.head())  # Debugging line
 
-    df['date'] = pd.to_datetime(df['date'])
-    
-    # Ensure all dates are Timestamps
+    # Get the actual column name from the mapping, or use the metric as-is if not in mapping
+    df_column = metric_mapping.get(metric, metric)
+
+    # Resolve data paths relative to this file
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+    prices_path = os.path.join(base_dir, 'data', 'rich_features_SPLG_history_full.csv')
+    timeline_path = os.path.join(base_dir, 'data', 'Financial Crisis Timeline by Day (since 2005).xlsx')
+
+    # Ensure dates are timestamps
     start_date = pd.to_datetime(start_date)
     end_date = pd.to_datetime(end_date)
-    
-    # Get the maximum date from the dataset
+
+    # Load prices (with fallback to simulated data)
+    if os.path.exists(prices_path):
+        df = pd.read_csv(prices_path)
+        df['date'] = pd.to_datetime(df['date'])
+    else:
+        # Fallback: generate simulated daily business prices for SPLG
+        sim = fetch_prices(['SPLG'], start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))
+        df = sim[sim['ticker'] == 'SPLG'].rename(columns={'close': 'close'})
+
+    # Clip end_date to available data
     max_available_date = df['date'].max()
-    
-    # Adjust end_date if it exceeds the maximum available date
+    if pd.isna(max_available_date):
+        raise ValueError("Price dataset contains no dates")
     if end_date > max_available_date:
-        print(f"Warning: Requested end date {end_date.date()} exceeds available data. Using maximum available date: {max_available_date.date()}")
         end_date = max_available_date
-    
-    df = df[(df['date'] >= start_date) & (df['date'] <= end_date)]
+
+    df = df[(df['date'] >= start_date) & (df['date'] <= end_date)].copy()
 
     if df.empty:
         raise ValueError("No data available for the selected date range.")
 
-    # Use the display name for the title and label, or map the column name to a proper display name
+    # Merge timeline events (if available)
+    df_merged = merge_timeline_into_prices(df, timeline_path)
+
+    # Display name for title
     display_names = {
         "close": "Closing",
         "open": "Opening",
@@ -234,15 +353,51 @@ def create_price_chart(metric, start_date, end_date):
         "current_price": "Daily Current"
     }
     display_name = metric if metric in metric_mapping else display_names.get(metric, metric.capitalize())
-    
+
+    # Base line chart
     fig = px.line(
-        df,
+        df_merged,
         x='date',
         y=df_column,
         title=f"{display_name} Price from {start_date.date()} to {end_date.date()}",
         labels={'date': 'Date', df_column: f'{display_name} Price ($)'}
     )
-    fig.update_layout(template='plotly_white')
+
+    # Add event markers for dates that have timeline events
+    # Use a safe boolean mask: if the column exists build mask, otherwise empty mask
+    if 'timeline_event_count' in df_merged.columns:
+        mask = df_merged['timeline_event_count'] > 0
+    else:
+        mask = pd.Series(False, index=df_merged.index)
+    events_df = df_merged[mask]
+    if not events_df.empty:
+        # Build hover text combining price info and timeline events
+        hover_texts = []
+        for _, r in events_df.iterrows():
+            price_val = r.get(df_column, '')
+            events = r.get('timeline_events', '')
+            events_html = events.replace('\n', '<br>')
+            # Add a bold heading for the events section and bold labels for date/price
+            text = (
+                f"<b>Date:</b> {r['date'].date()}<br>"
+                f"<b>{display_name}:</b> {price_val}<br><br>"
+                f"<b>Events:</b><br>{events_html}"
+            )
+            hover_texts.append(text)
+
+        fig.add_trace(go.Scatter(
+            x=events_df['date'],
+            y=events_df[df_column],
+            mode='markers',
+            marker=dict(size=8, color='red', symbol='triangle-up'),
+            name='Timeline Events',
+            hoverinfo='text',
+            hovertext=hover_texts
+        ))
+
+    # Ensure chart has reasonable height and bottom margin so UI elements
+    # (like the 'How to Use This Tool' info box) don't visually overlap.
+    fig.update_layout(template='plotly_white', height=480, margin=dict(t=60, b=80))
     return fig
 
 

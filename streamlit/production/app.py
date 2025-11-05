@@ -216,14 +216,17 @@ def render_lite_mode():
         except Exception as e:
             st.error(f"❌ Chart failed to render: {e}")
 
-    st.info("""
-    **💡 How to Use This Tool:**
-    1. Review model prediction
-    2. Check confidence score
-    3. Examine feature influence
-    4. Compare with recent price trends
-    *Educational use only.*
-    """)
+    with st.expander("💡 How to Use This Tool", expanded=False):
+        st.markdown("""
+        **How to Use This Tool**
+        
+        1. Review model prediction
+        2. Check confidence score
+        3. Examine feature influence
+        4. Compare with recent price trends
+
+        *Educational use only.*
+        """)
 
 
 # ---------- PRO MODE ----------
