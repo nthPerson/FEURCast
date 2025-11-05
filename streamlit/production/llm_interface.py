@@ -16,7 +16,6 @@ def get_openai_client():
     from dotenv import load_dotenv
     load_dotenv(os.path.join(os.path.dirname(__file__), '../../', '.env'))
     api_key = os.getenv('OPENAI_API_KEY')
-    print(f'DEBUG: THIS IS THE OPENAI KEY: {api_key}')
     return OpenAI(api_key=api_key)
 
 
