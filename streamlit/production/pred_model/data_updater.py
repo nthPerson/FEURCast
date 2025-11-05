@@ -66,7 +66,7 @@ def get_latest_date_in_dataset() -> Optional[datetime]:
         # Parse with UTC to avoid timezone warnings, then convert to timezone-naive
         df['date'] = pd.to_datetime(df['date'], utc=True).dt.tz_localize(None)
         latest_date = df['date'].max()
-        logger.info(f"Latest date in dataset: {latest_date.date()}")
+        # logger.info(f"Latest date in dataset: {latest_date.date()}")
         return latest_date
     except Exception as e:
         logger.error(f"Error reading dataset: {e}")
