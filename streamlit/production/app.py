@@ -77,7 +77,8 @@ def initialize_session_state():
     if "end_date" not in st.session_state: 
         st.session_state.end_date = pd.to_datetime("2025-09-24")  # Maximum date in our dataset
     if "max_dataset_date" not in st.session_state:
-        st.session_state.max_dataset_date = pd.to_datetime("2025-09-24")
+        st.session_state.max_dataset_date = get_latest_date_in_dataset()
+        # st.session_state.max_dataset_date = pd.to_datetime("2025-09-24")
 
 
 # ---------- SIDEBAR ----------
@@ -244,6 +245,9 @@ def render_pro_mode():
     st.markdown('<p class="main-header">🚀 FUREcast Pro Analytics</p>', unsafe_allow_html=True)
     st.markdown('<p class="sub-header">AI-Powered Investment Insights & Natural Language Interface</p>', unsafe_allow_html=True)
     
+    # Get max dataset date for use throughout Pro mode
+    max_dataset_date = st.session_state.max_dataset_date
+    
     # Quick prediction card (collapsible)
     with st.expander("📈 Current SPLG Prediction", expanded=True):
         if st.session_state.prediction_cache is None:
@@ -351,7 +355,8 @@ def render_pro_mode():
         # Generate visualizations based on intent
         st.markdown("### 📊 Visualizations")
         
-        viz_type = plan.get('visualization', {}).get('type', 'price')
+        viz_plan = plan.get('visualization') or {}
+        viz_type = viz_plan.get('type', 'price')
         
         if 'holding' in query.lower() or 'stock' in query.lower() or 'company' in query.lower():
             # Show detailed holdings treemap
@@ -386,8 +391,9 @@ def render_pro_mode():
             st.plotly_chart(fig, use_container_width=True)
         
         else:
-            # Default to price chart
-            fig = create_price_chart('SPLG', 180)
+            # Default to price chart - FIX: Add all required parameters
+            default_start = max_dataset_date - pd.Timedelta(days=180)
+            fig = create_price_chart('close', default_start, max_dataset_date)
             st.plotly_chart(fig, use_container_width=True)
     
     elif not query and submit:
