@@ -28,7 +28,7 @@ fig = px.treemap(
     title="SPLG Sector → Company Treemap"
 )
 
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig, config={"width": 'stretch'})
 
 # Optional: sector summary table
 st.subheader("Sector Summary (Weighted by SPLG)")
@@ -39,4 +39,4 @@ summ = df.groupby("Sector").agg({
     "Beta": "mean",
     "DividendYield": "mean"
 }).reset_index().sort_values("Weight (%)", ascending=False)
-st.dataframe(summ, use_container_width=True)
+st.dataframe(summ, width='stretch')
