@@ -8,21 +8,11 @@ from datetime import datetime
 import sys
 import os
 import pandas as pd
-import sys, os
 
-# Get the absolute path of the pred_model directory
-pred_model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'pred_model'))
+# Import from pred_model package
+from pred_model import get_latest_date_in_dataset
 
-# Add it to the Python path if not already present
-if pred_model_path not in sys.path:
-    sys.path.append(pred_model_path)
-
-# Now you can safely import
-from data_updater import get_latest_date_in_dataset
-
-# Add parent directory to path for .env access
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
+# Import from production package modules
 from simulator import (
     predict_splg,
     create_price_chart,
@@ -181,7 +171,7 @@ def render_feature_importance(features):
     col1, col2 = st.columns([3,2])
     with col1:
         fig = create_feature_importance_chart(features)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, key='feature_importance_chart')
     with col2:
         for i, feat in enumerate(features, 1):
             st.markdown(f"<div class='feature-item'><span><strong>{i}.</strong> {feat['name']}</span>"
@@ -225,7 +215,7 @@ def render_lite_mode():
             # Map display name to DataFrame column name
             df_column = st.session_state.metric_mapping[metric]
             fig = create_price_chart(df_column, pd.to_datetime(start_date), pd.to_datetime(end_date))
-            st.plotly_chart(fig, config={"responsive": True}, use_container_width=True)
+            st.plotly_chart(fig, config={"responsive": True}, use_container_width=True, key='price_chart')
         except Exception as e:
             st.error(f"❌ Chart failed to render: {e}")
 
@@ -368,7 +358,7 @@ def render_pro_mode():
                 key="query_treemap_color"
             )
             fig = create_sector_holdings_treemap(color_metric=color_metric)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, key='sector_holdings_treemap')
             
             # Show summary table
             summary_df = get_sector_summary()
@@ -378,79 +368,78 @@ def render_pro_mode():
         
         elif 'sector' in query.lower() and 'risk' in query.lower():
             fig = create_sector_risk_treemap()
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, key='sector_risk_treemap')
         
         elif 'compare' in query.lower() or 'performance' in query.lower():
             # Extract sectors from query (simplified)
             sectors = ['Technology', 'Utilities', 'Healthcare']
             fig = create_sector_comparison_chart(sectors)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, key='compare_chart')
         
         elif 'feature' in query.lower() or 'influence' in query.lower():
             fig = create_feature_importance_chart(prediction['top_features'])
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, key='feature_importance_chart')
         
         else:
             # Default to price chart - FIX: Add all required parameters
             default_start = max_dataset_date - pd.Timedelta(days=180)
             fig = create_price_chart('close', default_start, max_dataset_date)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, key='price_chart')
     
     elif not query and submit:
         st.warning("Please enter a question to analyze.")
     
-    # Additional tools section
-    if not query:
-        st.markdown("---")
-        st.markdown("### 📊 Quick Analytics")
+    # Additional tools section - MOVED OUTSIDE the conditional logic
+    st.markdown("---")
+    st.markdown("### 📊 Quick Analytics")
+    
+    tab1, tab2, tab3, tab4 = st.tabs(["Sector Risk", "Holdings Detail", "Price Trends", "Feature Analysis"])
+    
+    with tab1:
+        st.markdown("**Sector Risk Treemap** - Size by market cap, color by volatility")
+        fig = create_sector_risk_treemap()
+        st.plotly_chart(fig, use_container_width=True, key='sector_risk_treemap_2')
+    
+    with tab2:
+        st.markdown("**SPLG Holdings Drill-Down** - Explore sectors and individual holdings")
+        st.caption("Size = SPLG Weight (%). Click on sectors to drill down into holdings. Hover for detailed KPIs.")
         
-        tab1, tab2, tab3, tab4 = st.tabs(["Sector Risk", "Holdings Detail", "Price Trends", "Feature Analysis"])
+        color_option = st.selectbox(
+            "Color by:",
+            ["DailyChangePct", "PE", "Beta", "DividendYield"],
+            index=0,
+            key="holdings_treemap_color"
+        )
+        fig = create_sector_holdings_treemap(color_metric=color_option)
+        st.plotly_chart(fig, use_container_width=True, key='sector_holdings_treemap_2')
         
-        with tab1:
-            st.markdown("**Sector Risk Treemap** - Size by market cap, color by volatility")
-            fig = create_sector_risk_treemap()
-            st.plotly_chart(fig, use_container_width=True)
+        st.markdown("**Sector Summary (Weighted by SPLG)**")
+        summary_df = get_sector_summary()
+        if not summary_df.empty:
+            st.dataframe(summary_df, use_container_width=True, hide_index=True)
+    
+    with tab3:
+        st.markdown("**SPLG Historical Performance**")
+        metric = st.session_state.metric
+        start_date = st.session_state.start_date
+        end_date = st.session_state.end_date
+        # Map display name to DataFrame column name
+        df_column = st.session_state.metric_mapping[metric]
+        fig = create_price_chart(df_column, pd.to_datetime(start_date), pd.to_datetime(end_date))
+        st.plotly_chart(fig, use_container_width=True, key='price_chart_2')
+    
+    with tab4:
+        st.markdown("**Current Model Feature Importance**")
+        fig = create_feature_importance_chart(prediction['top_features'])
+        st.plotly_chart(fig, use_container_width=True, key='feature_importance_chart_2')
         
-        with tab2:
-            st.markdown("**SPLG Holdings Drill-Down** - Explore sectors and individual holdings")
-            st.caption("Size = SPLG Weight (%). Click on sectors to drill down into holdings. Hover for detailed KPIs.")
-            
-            color_option = st.selectbox(
-                "Color by:",
-                ["DailyChangePct", "PE", "Beta", "DividendYield"],
-                index=0,
-                key="holdings_treemap_color"
-            )
-            fig = create_sector_holdings_treemap(color_metric=color_option)
-            st.plotly_chart(fig, use_container_width=True)
-            
-            st.markdown("**Sector Summary (Weighted by SPLG)**")
-            summary_df = get_sector_summary()
-            if not summary_df.empty:
-                st.dataframe(summary_df, use_container_width=True, hide_index=True)
-        
-        with tab3:
-            st.markdown("**SPLG Historical Performance**")
-            metric = st.session_state.metric
-            start_date = st.session_state.start_date
-            end_date = st.session_state.end_date
-            # Map display name to DataFrame column name
-            df_column = st.session_state.metric_mapping[metric]
-            fig = create_price_chart(df_column, pd.to_datetime(start_date), pd.to_datetime(end_date))
-            st.plotly_chart(fig, use_container_width=True)
-        
-        with tab4:
-            st.markdown("**Current Model Feature Importance**")
-            fig = create_feature_importance_chart(prediction['top_features'])
-            st.plotly_chart(fig, use_container_width=True)
-            
-            st.markdown("**Explanation:**")
-            with st.spinner("Generating explanation..."):
-                try:
-                    explanation = explain_prediction(st.session_state.prediction_cache)
-                    st.info(explanation)
-                except:
-                    st.info("Technical indicators drive the model's predictions by capturing market momentum, trends, and volatility patterns.")
+        st.markdown("**Explanation:**")
+        with st.spinner("Generating explanation..."):
+            try:
+                explanation = explain_prediction(st.session_state.prediction_cache)
+                st.info(explanation)
+            except:
+                st.info("Technical indicators drive the model's predictions by capturing market momentum, trends, and volatility patterns.")
 
 
 

@@ -49,16 +49,20 @@ def setup_logger(name: str) -> logging.Logger:
 logger = setup_logger(__name__)
 
 
-def get_latest_date_in_dataset() -> Optional[datetime]:
+def get_latest_date_in_dataset(enable_logging: bool = False) -> Optional[datetime]:
     """
     Get the most recent date in the existing dataset.
+    
+    Args:
+        enable_logging: If True, creates log files and outputs. Default False for silent operation.
     
     Returns:
         datetime object of latest date, or None if dataset doesn't exist
     """
     # Check RAW data file, not the features file!
     if not RAW_DATA_PATH.exists():
-        logger.warning(f"Raw dataset not found at {RAW_DATA_PATH}")
+        if enable_logging:
+            logger.warning(f"Raw dataset not found at {RAW_DATA_PATH}")
         return None
     
     try:
@@ -66,10 +70,13 @@ def get_latest_date_in_dataset() -> Optional[datetime]:
         # Parse with UTC to avoid timezone warnings, then convert to timezone-naive
         df['date'] = pd.to_datetime(df['date'], utc=True).dt.tz_localize(None)
         latest_date = df['date'].max()
-        # logger.info(f"Latest date in dataset: {latest_date.date()}")
+        # Only log if explicitly enabled
+        if enable_logging:
+            logger.info(f"Latest date in dataset: {latest_date.date()}")
         return latest_date
     except Exception as e:
-        logger.error(f"Error reading dataset: {e}")
+        if enable_logging:
+            logger.error(f"Error reading dataset: {e}")
         return None
 
 
@@ -90,7 +97,7 @@ def fetch_new_splg_data(start_date: Optional[datetime] = None,
         end_date = datetime.now()
     
     if start_date is None:
-        latest_date = get_latest_date_in_dataset()
+        latest_date = get_latest_date_in_dataset(enable_logging=True)  # Enable logging in pipeline context
         if latest_date is None:
             logger.error("No existing dataset found. Verify RAW_DATA_PATH in data_updater.py (should point to SPLG_history_full.csv)")
             return None
