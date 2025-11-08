@@ -74,7 +74,7 @@ def initialize_session_state():
 # ---------- SIDEBAR ----------
 def render_sidebar():
     with st.sidebar:
-        st.image("https://upload.wikimedia.org/wikipedia/commons/c/c8/FURECast_SPLG.png", use_container_width=True)
+        st.image("https://upload.wikimedia.org/wikipedia/commons/c/c8/FURECast_SPLG.png", width='stretch')
         st.markdown("### 🎓 Demo Mode")
         st.session_state.mode = st.radio(
             "Select Mode:",
@@ -91,10 +91,10 @@ def render_sidebar():
             key="metric_selector"
         )
 
-        #""" For Uma: this is the function that you will need to use to get the most recent date from the dataset: streamlit.production.pred_model.data_updater.get_latest_date_in_dataset() """ 
         # Define the maximum available date from our dataset (last available date in historical data)
         MAX_DATASET_DATE = pd.to_datetime(get_latest_date_in_dataset())
-   # Convert Timestamp to date for comparison and display
+    
+        # Convert Timestamp to date for comparison and display
         current_end_date = st.session_state.end_date.date() if isinstance(st.session_state.end_date, pd.Timestamp) else st.session_state.end_date
         current_start_date = st.session_state.start_date.date() if isinstance(st.session_state.start_date, pd.Timestamp) else st.session_state.start_date
         
@@ -171,7 +171,7 @@ def render_feature_importance(features):
     col1, col2 = st.columns([3,2])
     with col1:
         fig = create_feature_importance_chart(features)
-        st.plotly_chart(fig, use_container_width=True, key='feature_importance_chart')
+        st.plotly_chart(fig, config={'width': 'stretch'}, key='feature_importance_chart')
     with col2:
         for i, feat in enumerate(features, 1):
             st.markdown(f"<div class='feature-item'><span><strong>{i}.</strong> {feat['name']}</span>"
@@ -215,7 +215,7 @@ def render_lite_mode():
             # Map display name to DataFrame column name
             df_column = st.session_state.metric_mapping[metric]
             fig = create_price_chart(df_column, pd.to_datetime(start_date), pd.to_datetime(end_date))
-            st.plotly_chart(fig, config={"responsive": True}, use_container_width=True, key='price_chart')
+            st.plotly_chart(fig, config={"responsive": True, "width": 'stretch'}, key='price_chart')
         except Exception as e:
             st.error(f"❌ Chart failed to render: {e}")
 
@@ -277,7 +277,7 @@ def render_pro_mode():
         cols = st.columns(2)
         for i, example in enumerate(examples):
             with cols[i % 2]:
-                if st.button(example, key=f"example_query_button_{i}", use_container_width=True):
+                if st.button(example, key=f"example_query_button_{i}", width='stretch'):
                     st.session_state.last_query = example
     
     # Query input
@@ -291,9 +291,9 @@ def render_pro_mode():
     
     col1, col2 = st.columns([1, 5])
     with col1:
-        submit = st.button("🔍 Analyze", type="primary", use_container_width=True, key="analyze_button")
+        submit = st.button("🔍 Analyze", type="primary", width='stretch', key="analyze_button")
     with col2:
-        if st.button("Clear", use_container_width=True, key="clear_button"):
+        if st.button("Clear", width='stretch', key="clear_button"):
             st.session_state.last_query = ""
             st.rerun()
     
@@ -358,33 +358,33 @@ def render_pro_mode():
                 key="query_treemap_color"
             )
             fig = create_sector_holdings_treemap(color_metric=color_metric)
-            st.plotly_chart(fig, use_container_width=True, key='sector_holdings_treemap')
+            st.plotly_chart(fig, config={"width": 'stretch'}, key='sector_holdings_treemap')
             
             # Show summary table
             summary_df = get_sector_summary()
             if not summary_df.empty:
                 with st.expander("📊 Sector Summary Table", expanded=False):
-                    st.dataframe(summary_df, use_container_width=True, hide_index=True)
+                    st.dataframe(summary_df, width='stretch', hide_index=True)
         
         elif 'sector' in query.lower() and 'risk' in query.lower():
             fig = create_sector_risk_treemap()
-            st.plotly_chart(fig, use_container_width=True, key='sector_risk_treemap')
+            st.plotly_chart(fig, config={"width": 'stretch'}, key='sector_risk_treemap')
         
         elif 'compare' in query.lower() or 'performance' in query.lower():
             # Extract sectors from query (simplified)
             sectors = ['Technology', 'Utilities', 'Healthcare']
             fig = create_sector_comparison_chart(sectors)
-            st.plotly_chart(fig, use_container_width=True, key='compare_chart')
+            st.plotly_chart(fig, config={"width": 'stretch'}, key='compare_chart')
         
         elif 'feature' in query.lower() or 'influence' in query.lower():
             fig = create_feature_importance_chart(prediction['top_features'])
-            st.plotly_chart(fig, use_container_width=True, key='feature_importance_chart')
+            st.plotly_chart(fig, config={"width": 'stretch'}, key='feature_importance_chart')
         
         else:
             # Default to price chart - FIX: Add all required parameters
             default_start = max_dataset_date - pd.Timedelta(days=180)
             fig = create_price_chart('close', default_start, max_dataset_date)
-            st.plotly_chart(fig, use_container_width=True, key='price_chart')
+            st.plotly_chart(fig, config={"width": 'stretch'}, key='price_chart')
     
     elif not query and submit:
         st.warning("Please enter a question to analyze.")
@@ -398,7 +398,7 @@ def render_pro_mode():
     with tab1:
         st.markdown("**Sector Risk Treemap** - Size by market cap, color by volatility")
         fig = create_sector_risk_treemap()
-        st.plotly_chart(fig, use_container_width=True, key='sector_risk_treemap_2')
+        st.plotly_chart(fig, config={"width": 'stretch'}, key='sector_risk_treemap_2')
     
     with tab2:
         st.markdown("**SPLG Holdings Drill-Down** - Explore sectors and individual holdings")
@@ -411,12 +411,12 @@ def render_pro_mode():
             key="holdings_treemap_color"
         )
         fig = create_sector_holdings_treemap(color_metric=color_option)
-        st.plotly_chart(fig, use_container_width=True, key='sector_holdings_treemap_2')
+        st.plotly_chart(fig, config={"width": 'stretch'}, key='sector_holdings_treemap_2')
         
         st.markdown("**Sector Summary (Weighted by SPLG)**")
         summary_df = get_sector_summary()
         if not summary_df.empty:
-            st.dataframe(summary_df, use_container_width=True, hide_index=True)
+            st.dataframe(summary_df, width='stretch', hide_index=True)
     
     with tab3:
         st.markdown("**SPLG Historical Performance**")
@@ -426,12 +426,12 @@ def render_pro_mode():
         # Map display name to DataFrame column name
         df_column = st.session_state.metric_mapping[metric]
         fig = create_price_chart(df_column, pd.to_datetime(start_date), pd.to_datetime(end_date))
-        st.plotly_chart(fig, use_container_width=True, key='price_chart_2')
+        st.plotly_chart(fig, config={"width": 'stretch'}, key='price_chart_2')
     
     with tab4:
         st.markdown("**Current Model Feature Importance**")
         fig = create_feature_importance_chart(prediction['top_features'])
-        st.plotly_chart(fig, use_container_width=True, key='feature_importance_chart_2')
+        st.plotly_chart(fig, config={"width": 'stretch'}, key='feature_importance_chart_2')
         
         st.markdown("**Explanation:**")
         with st.spinner("Generating explanation..."):
