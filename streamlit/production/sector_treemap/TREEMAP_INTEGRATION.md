@@ -134,11 +134,11 @@ Potential improvements to consider:
 ```python
 # Basic usage
 fig = create_sector_holdings_treemap()
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig, config={"width": 'stretch'})
 
 # With custom color metric
 fig = create_sector_holdings_treemap(color_metric='PE')
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig, width='stretch')
 
 # Get summary data
 summary = get_sector_summary()

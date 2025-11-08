@@ -113,7 +113,7 @@ Or try a natural language query:
 ```python
 # Usage
 fig = create_sector_holdings_treemap('DailyChangePct')
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig, config={"width": 'stretch'})
 ```
 
 **Features:**
@@ -127,7 +127,7 @@ st.plotly_chart(fig, use_container_width=True)
 ```python
 # Usage
 summary_df = get_sector_summary()
-st.dataframe(summary_df, use_container_width=True)
+st.dataframe(summary_df, width='stretch')
 ```
 
 **Returns:** DataFrame with columns:
