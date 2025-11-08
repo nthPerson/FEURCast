@@ -52,6 +52,7 @@ def initialize_session_state():
     if 'mode' not in st.session_state: st.session_state.mode = 'Lite'
     if 'prediction_cache' not in st.session_state: st.session_state.prediction_cache = None
     if 'last_query' not in st.session_state: st.session_state.last_query = ""
+    if 'execute_query' not in st.session_state: st.session_state.execute_query = False
     # Metric display names to DataFrame column mapping
     if 'metric_mapping' not in st.session_state:
         st.session_state.metric_mapping = {
@@ -277,8 +278,10 @@ def render_pro_mode():
         cols = st.columns(2)
         for i, example in enumerate(examples):
             with cols[i % 2]:
-                if st.button(example, key=f"example_query_button_{i}", width='stretch'):
+                if st.button(example, key=f"example_query_button_{i}", use_container_width=True):
                     st.session_state.last_query = example
+                    st.session_state.execute_query = True
+                    st.rerun()
     
     # Query input
     query = st.text_input(
@@ -291,13 +294,19 @@ def render_pro_mode():
     
     col1, col2 = st.columns([1, 5])
     with col1:
-        submit = st.button("🔍 Analyze", type="primary", width='stretch', key="analyze_button")
+        submit = st.button("🔍 Analyze", type="primary", use_container_width=True, key="analyze_button")
     with col2:
-        if st.button("Clear", width='stretch', key="clear_button"):
+        if st.button("Clear", use_container_width=True, key="clear_button"):
             st.session_state.last_query = ""
+            st.session_state.execute_query = False
             st.rerun()
     
-    if submit and query:
+    # Execute query if submitted via button OR if example query was clicked
+    should_execute = (submit and query) or (st.session_state.execute_query and query)
+    
+    if should_execute:
+        # Reset the execute flag
+        st.session_state.execute_query = False
         st.session_state.last_query = query
         
         with st.spinner("🤔 Planning analysis..."):
