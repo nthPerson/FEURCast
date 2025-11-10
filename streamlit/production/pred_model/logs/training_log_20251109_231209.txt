@@ -1,0 +1,34 @@
+2025-11-09 23:12:09,559 - INFO - ================================================================================
+2025-11-09 23:12:09,559 - INFO - FUREcast GBR Model Training Pipeline
+2025-11-09 23:12:09,559 - INFO - ================================================================================
+2025-11-09 23:12:09,559 - INFO - Log file: /home/robert/FEURCast/streamlit/production/pred_model/logs/training_log_20251109_231209.txt
+2025-11-09 23:12:09,559 - INFO - Random seed: 42
+2025-11-09 23:12:09,559 - INFO - Loading data from /home/robert/FEURCast/data/rich_features_SPLG_history_full.csv
+2025-11-09 23:12:09,613 - INFO - Loaded 5025 records with 116 columns
+2025-11-09 23:12:09,615 - ERROR - Training failed with error: unconverted data remains when parsing with format "%Y-%m-%d": " 00:00:00", at position 4310. You might want to try:
+    - passing `format` if your strings have a consistent format;
+    - passing `format='ISO8601'` if your strings are all ISO8601 but not necessarily in exactly the same format;
+    - passing `format='mixed'`, and the format will be inferred for each element individually. You might want to use `dayfirst` alongside this.
+Traceback (most recent call last):
+  File "/home/robert/FEURCast/streamlit/production/pred_model/scripts/train_gbr_model.py", line 459, in main
+    X, y, dates, feature_names, metadata = load_and_prepare_data()
+                                           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/robert/FEURCast/streamlit/production/pred_model/scripts/train_gbr_model.py", line 75, in load_and_prepare_data
+    df['date'] = pd.to_datetime(df['date'])
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/robert/anaconda3/envs/feurcast-env/lib/python3.11/site-packages/pandas/core/tools/datetimes.py", line 1072, in to_datetime
+    values = convert_listlike(arg._values, format)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/robert/anaconda3/envs/feurcast-env/lib/python3.11/site-packages/pandas/core/tools/datetimes.py", line 435, in _convert_listlike_datetimes
+    return _array_strptime_with_fallback(arg, name, utc, format, exact, errors)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/robert/anaconda3/envs/feurcast-env/lib/python3.11/site-packages/pandas/core/tools/datetimes.py", line 469, in _array_strptime_with_fallback
+    result, tz_out = array_strptime(arg, fmt, exact=exact, errors=errors, utc=utc)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "pandas/_libs/tslibs/strptime.pyx", line 501, in pandas._libs.tslibs.strptime.array_strptime
+  File "pandas/_libs/tslibs/strptime.pyx", line 451, in pandas._libs.tslibs.strptime.array_strptime
+  File "pandas/_libs/tslibs/strptime.pyx", line 587, in pandas._libs.tslibs.strptime._parse_with_format
+ValueError: unconverted data remains when parsing with format "%Y-%m-%d": " 00:00:00", at position 4310. You might want to try:
+    - passing `format` if your strings have a consistent format;
+    - passing `format='ISO8601'` if your strings are all ISO8601 but not necessarily in exactly the same format;
+    - passing `format='mixed'`, and the format will be inferred for each element individually. You might want to use `dayfirst` alongside this.

@@ -10,3 +10,60 @@
 2025-11-09 22:32:41,061 - INFO - Feature Engineering - Full Rebuild
 2025-11-09 22:32:41,061 - INFO - ======================================================================
 2025-11-09 22:32:41,062 - INFO - Running feature engineering pipeline...
+2025-11-09 23:11:19,720 - INFO - ======================================================================
+2025-11-09 23:11:19,720 - INFO - Feature Engineering - Full Rebuild
+2025-11-09 23:11:19,720 - INFO - ======================================================================
+2025-11-09 23:11:19,725 - INFO - Running feature engineering pipeline...
+2025-11-09 23:11:19,789 - ERROR - Error during feature engineering: name 'logger' is not defined
+2025-11-09 23:11:19,790 - ERROR - Traceback (most recent call last):
+  File "/home/robert/FEURCast/streamlit/production/pred_model/feature_updater.py", line 72, in rebuild_features_from_scratch
+    build_features([])  # Pass empty list as argv since paths are hardcoded in the script
+    ^^^^^^^^^^^^^^^^^^
+  File "/home/robert/FEURCast/streamlit/production/pred_model/build_splg_features.py", line 288, in main
+    df_feat = engineer_features(df_raw)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/robert/FEURCast/streamlit/production/pred_model/build_splg_features.py", line 251, in engineer_features
+    logger.info(f"Data shape before target filtering: {df.shape}")
+    ^^^^^^
+NameError: name 'logger' is not defined
+
+2025-11-09 23:12:07,811 - INFO - ======================================================================
+2025-11-09 23:12:07,811 - INFO - Feature Engineering - Full Rebuild
+2025-11-09 23:12:07,811 - INFO - ======================================================================
+2025-11-09 23:12:07,813 - INFO - Running feature engineering pipeline...
+2025-11-09 23:12:08,294 - INFO - ✓ Generated features: 5025 rows, 116 columns
+2025-11-09 23:12:08,620 - INFO - ✓ Saved features to /home/robert/FEURCast/data/rich_features_SPLG_history_full.csv
+2025-11-09 23:12:08,625 - INFO - ✓ No infinite values detected
+2025-11-09 23:12:08,625 - INFO - ======================================================================
+2025-11-09 23:12:08,625 - INFO - ✓ Feature engineering complete
+2025-11-09 23:12:08,625 - INFO - ======================================================================
+2025-11-09 23:19:07,014 - INFO - ======================================================================
+2025-11-09 23:19:07,014 - INFO - Feature Engineering - Full Rebuild
+2025-11-09 23:19:07,014 - INFO - ======================================================================
+2025-11-09 23:19:07,017 - INFO - Running feature engineering pipeline...
+2025-11-09 23:19:07,508 - INFO - ✓ Generated features: 5025 rows, 116 columns
+2025-11-09 23:19:07,819 - INFO - ✓ Saved features to /home/robert/FEURCast/data/rich_features_SPLG_history_full.csv
+2025-11-09 23:19:07,824 - INFO - ✓ No infinite values detected
+2025-11-09 23:19:07,824 - INFO - ======================================================================
+2025-11-09 23:19:07,824 - INFO - ✓ Feature engineering complete
+2025-11-09 23:19:07,824 - INFO - ======================================================================
+2025-11-09 23:22:15,054 - INFO - ======================================================================
+2025-11-09 23:22:15,054 - INFO - Feature Engineering - Full Rebuild
+2025-11-09 23:22:15,054 - INFO - ======================================================================
+2025-11-09 23:22:15,057 - INFO - Running feature engineering pipeline...
+2025-11-09 23:22:15,488 - INFO - ✓ Generated features: 5026 rows, 116 columns
+2025-11-09 23:22:15,766 - INFO - ✓ Saved features to /home/robert/FEURCast/data/rich_features_SPLG_history_full.csv
+2025-11-09 23:22:15,771 - INFO - ✓ No infinite values detected
+2025-11-09 23:22:15,771 - INFO - ======================================================================
+2025-11-09 23:22:15,771 - INFO - ✓ Feature engineering complete
+2025-11-09 23:22:15,771 - INFO - ======================================================================
+2025-11-09 23:51:05,809 - INFO - ======================================================================
+2025-11-09 23:51:05,809 - INFO - Feature Engineering - Full Rebuild
+2025-11-09 23:51:05,809 - INFO - ======================================================================
+2025-11-09 23:51:05,813 - INFO - Running feature engineering pipeline...
+2025-11-09 23:51:06,232 - INFO - ✓ Generated features: 5026 rows, 116 columns
+2025-11-09 23:51:06,516 - INFO - ✓ Saved features to /home/robert/FEURCast/data/rich_features_SPLG_history_full.csv
+2025-11-09 23:51:06,521 - INFO - ✓ No infinite values detected
+2025-11-09 23:51:06,521 - INFO - ======================================================================
+2025-11-09 23:51:06,521 - INFO - ✓ Feature engineering complete
+2025-11-09 23:51:06,521 - INFO - ======================================================================

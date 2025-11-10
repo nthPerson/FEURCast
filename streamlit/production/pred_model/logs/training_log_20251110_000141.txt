@@ -1,0 +1,121 @@
+2025-11-10 00:01:41,731 - INFO - ================================================================================
+2025-11-10 00:01:41,731 - INFO - FUREcast GBR Model Training Pipeline
+2025-11-10 00:01:41,731 - INFO - ================================================================================
+2025-11-10 00:01:41,731 - INFO - Log file: /home/robert/FEURCast/streamlit/production/pred_model/logs/training_log_20251110_000141.txt
+2025-11-10 00:01:41,731 - INFO - Random seed: 42
+2025-11-10 00:01:41,731 - INFO - Loading data from /home/robert/FEURCast/data/rich_features_SPLG_history_full.csv
+2025-11-10 00:01:41,787 - INFO - Loaded 5026 records with 116 columns
+2025-11-10 00:01:41,791 - INFO - Date range: 2005-11-15 00:00:00 to 2025-11-06 19:00:00
+2025-11-10 00:01:41,791 - INFO - Feature columns: 111
+2025-11-10 00:01:41,791 - INFO - Target: target_return_t1 (next-day percentage return)
+2025-11-10 00:01:41,793 - INFO - 
+============================================================
+2025-11-10 00:01:41,793 - INFO - PERFORMING DATA QUALITY CHECKS AND CLEANING
+2025-11-10 00:01:41,793 - INFO - ============================================================
+2025-11-10 00:01:41,793 - INFO - Initial dataset size: 5026 rows, 111 features
+2025-11-10 00:01:41,794 - INFO - ✓ No infinite values found
+2025-11-10 00:01:41,794 - INFO - 
+NaN Statistics (before cleaning):
+2025-11-10 00:01:41,794 - INFO -   Total feature NaNs: 6044
+2025-11-10 00:01:41,795 - INFO -   Features with NaNs: 62 of 111
+2025-11-10 00:01:41,795 - INFO -   Target NaNs: 1
+2025-11-10 00:01:41,795 - INFO - 
+Features with >5% NaN values:
+2025-11-10 00:01:41,795 - INFO -   beta: 4996 (99.4%)
+2025-11-10 00:01:41,795 - INFO - 
+Applying intelligent NaN handling strategy...
+2025-11-10 00:01:41,796 - INFO - Dropping 1 columns with >95.0% NaN:
+2025-11-10 00:01:41,796 - INFO -   beta: 99.4% NaN
+2025-11-10 00:01:41,797 - INFO - Remaining features: 110
+2025-11-10 00:01:41,797 - INFO - 
+Forward-filling NaN in 81 rolling/technical indicator features...
+2025-11-10 00:01:41,817 - INFO -   NaN values filled: 1001 → 0
+2025-11-10 00:01:41,817 - INFO - 
+Dropping rows with NaN in basic features or target...
+2025-11-10 00:01:41,819 - INFO - Remaining NaN in 6 features:
+2025-11-10 00:01:41,819 - INFO -   return_1d: 1 (0.0%)
+2025-11-10 00:01:41,819 - INFO -   log_return: 1 (0.0%)
+2025-11-10 00:01:41,819 - INFO -   return_5d: 5 (0.1%)
+2025-11-10 00:01:41,819 - INFO -   return_10d: 10 (0.2%)
+2025-11-10 00:01:41,819 - INFO -   return_20d: 20 (0.4%)
+2025-11-10 00:01:41,819 - INFO -   roc_10: 10 (0.2%)
+2025-11-10 00:01:41,827 - INFO - Dropped 21 rows (0.4%)
+2025-11-10 00:01:41,827 - INFO - ✓ Final training set: 5005 samples
+2025-11-10 00:01:41,828 - INFO - 
+✓ All data quality checks passed
+2025-11-10 00:01:41,830 - INFO - 
+Final cleaned dataset:
+2025-11-10 00:01:41,830 - INFO -   Shape: 5005 samples × 110 features
+2025-11-10 00:01:41,831 - INFO -   Date range: 2005-12-14 00:00:00 to 2025-11-05 19:00:00
+2025-11-10 00:01:41,831 - INFO - 
+Target (next-day return) statistics:
+2025-11-10 00:01:41,831 - INFO -   Mean:       0.000405
+2025-11-10 00:01:41,831 - INFO -   Std:        0.011668
+2025-11-10 00:01:41,831 - INFO -   Min:       -0.116761
+2025-11-10 00:01:41,831 - INFO -   1st %ile:  -0.034586
+2025-11-10 00:01:41,831 - INFO -   Median:     0.000225
+2025-11-10 00:01:41,831 - INFO -   99th %ile:  0.031242
+2025-11-10 00:01:41,831 - INFO -   Max:        0.095256
+2025-11-10 00:01:41,831 - INFO - ============================================================
+
+2025-11-10 00:01:41,831 - INFO - Creating time-based train/val/test splits (70%/15%/15%)
+2025-11-10 00:01:41,831 - INFO - Train: 2005-12-14 00:00:00 to 2019-11-13 00:00:00 (3503 samples)
+2025-11-10 00:01:41,832 - INFO - Val:   2019-11-14 00:00:00 to 2022-11-04 00:00:00 (750 samples)
+2025-11-10 00:01:41,832 - INFO - Test:  2022-11-07 00:00:00 to 2025-11-05 19:00:00 (752 samples)
+2025-11-10 00:01:41,832 - INFO - Scaling features with StandardScaler
+2025-11-10 00:01:41,838 - INFO - Feature scaling complete
+2025-11-10 00:01:41,838 - INFO - Training with recommended hyperparameters (quick mode)...
+2025-11-10 00:01:42,001 - INFO - Quick training complete
+2025-11-10 00:01:42,001 - INFO - 
+================================================================================
+2025-11-10 00:01:42,001 - INFO - MODEL EVALUATION
+2025-11-10 00:01:42,001 - INFO - ================================================================================
+2025-11-10 00:01:42,004 - INFO - 
+Training Set Performance:
+2025-11-10 00:01:42,004 - INFO -   MSE:  0.00010984
+2025-11-10 00:01:42,004 - INFO -   RMSE: 0.010481
+2025-11-10 00:01:42,004 - INFO -   MAE:  0.006808
+2025-11-10 00:01:42,004 - INFO -   R²:   0.090176
+2025-11-10 00:01:42,004 - INFO -   MAPE: 37119303.11%
+2025-11-10 00:01:42,004 - INFO -   Directional Accuracy: 51.18%
+2025-11-10 00:01:42,006 - INFO - 
+Validation Set Performance:
+2025-11-10 00:01:42,006 - INFO -   MSE:  0.00025932
+2025-11-10 00:01:42,006 - INFO -   RMSE: 0.016104
+2025-11-10 00:01:42,006 - INFO -   MAE:  0.010422
+2025-11-10 00:01:42,006 - INFO -   R²:   -0.051361
+2025-11-10 00:01:42,006 - INFO -   MAPE: 6244455.68%
+2025-11-10 00:01:42,006 - INFO -   Directional Accuracy: 54.67%
+2025-11-10 00:01:42,007 - INFO - 
+Test Set Performance:
+2025-11-10 00:01:42,007 - INFO -   MSE:  0.00009896
+2025-11-10 00:01:42,007 - INFO -   RMSE: 0.009948
+2025-11-10 00:01:42,007 - INFO -   MAE:  0.006867
+2025-11-10 00:01:42,007 - INFO -   R²:   -0.016837
+2025-11-10 00:01:42,007 - INFO -   MAPE: 14436810.70%
+2025-11-10 00:01:42,007 - INFO -   Directional Accuracy: 54.12%
+2025-11-10 00:01:42,008 - INFO - Saving model artifacts...
+2025-11-10 00:01:42,010 - INFO - Saved model to /home/robert/FEURCast/streamlit/production/pred_model/models/gbr_model.pkl
+2025-11-10 00:01:42,010 - INFO - Saved scaler to /home/robert/FEURCast/streamlit/production/pred_model/models/scaler.pkl
+2025-11-10 00:01:42,010 - INFO - Saved feature names to /home/robert/FEURCast/streamlit/production/pred_model/models/feature_names.pkl
+2025-11-10 00:01:42,014 - INFO - Saved metrics to /home/robert/FEURCast/streamlit/production/pred_model/models/metrics.json
+2025-11-10 00:01:42,016 - INFO - Saved feature importance to /home/robert/FEURCast/streamlit/production/pred_model/models/feature_importance.csv
+2025-11-10 00:01:42,019 - INFO - Saved model metadata to /home/robert/FEURCast/streamlit/production/pred_model/models/model_metadata.json
+2025-11-10 00:01:42,019 - INFO - All artifacts saved successfully
+2025-11-10 00:01:42,019 - INFO - 
+================================================================================
+2025-11-10 00:01:42,019 - INFO - TRAINING COMPLETE
+2025-11-10 00:01:42,020 - INFO - ================================================================================
+2025-11-10 00:01:42,020 - INFO - Final Test R² Score: -0.016837
+2025-11-10 00:01:42,020 - INFO - Final Test RMSE: 0.009948
+2025-11-10 00:01:42,020 - INFO - Final Test Directional Accuracy: 54.12%
+2025-11-10 00:01:42,020 - INFO - Top 5 Features:
+2025-11-10 00:01:42,021 - INFO -   lag_1_return: 0.0499
+2025-11-10 00:01:42,021 - INFO -   price_ma_50_ratio: 0.0471
+2025-11-10 00:01:42,021 - INFO -   ma_100_slope: 0.0449
+2025-11-10 00:01:42,021 - INFO -   price_ma_10_ratio: 0.0353
+2025-11-10 00:01:42,021 - INFO -   low: 0.0344
+2025-11-10 00:01:42,021 - INFO - 
+All artifacts saved to:
+2025-11-10 00:01:42,021 - INFO -   Models: /home/robert/FEURCast/streamlit/production/pred_model/models
+2025-11-10 00:01:42,021 - INFO -   Logs: /home/robert/FEURCast/streamlit/production/pred_model/logs/training_log_20251110_000141.txt

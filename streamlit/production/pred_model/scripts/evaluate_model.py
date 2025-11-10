@@ -75,7 +75,15 @@ def load_and_prepare_data(feature_names):
     logger.info("Loading data...")
     
     df = pd.read_csv(DATA_PATH)
-    df['date'] = pd.to_datetime(df['date'])
+    
+    # Parse dates with flexible format handling
+    try:
+        df['date'] = pd.to_datetime(df['date'], format='mixed', errors='coerce')
+    except:
+        df['date'] = pd.to_datetime(df['date'], errors='coerce')
+    
+    # Drop rows with invalid dates
+    df = df.dropna(subset=['date'])
     
     metadata_cols = ['date', 'company_name', 'ticker']
     target_cols = ['target_close_t1', 'target_return_t1']
@@ -87,13 +95,15 @@ def load_and_prepare_data(feature_names):
     # ====== DATA CLEANING (SAME AS TRAINING) ======
     logger.info("Performing data quality checks...")
     
+    initial_rows = len(X)
+    
     # 1. Replace infinite values with NaN
     inf_counts = np.isinf(X).sum()
     if inf_counts.sum() > 0:
         logger.warning(f"Found {inf_counts.sum()} infinite values across {(inf_counts > 0).sum()} features")
         X.replace([np.inf, -np.inf], np.nan, inplace=True)
     
-    # 2. Drop rows with NaN
+    # 2. Drop rows with NaN in features OR target
     nan_counts = X.isna().sum()
     nan_target = y.isna().sum()
     
@@ -104,7 +114,9 @@ def load_and_prepare_data(feature_names):
         X = X[valid_idx]
         y = y[valid_idx]
         dates = dates[valid_idx]
-        logger.info(f"Remaining records after cleaning: {len(X)}")
+        rows_dropped = initial_rows - len(X)
+        logger.info(f"Dropped {rows_dropped} rows ({rows_dropped/initial_rows*100:.1f}%)")
+        logger.info(f"Remaining records: {len(X)}")
     
     # Verify no issues remain
     assert not np.isinf(X.values).any(), "Infinite values still present after cleaning"

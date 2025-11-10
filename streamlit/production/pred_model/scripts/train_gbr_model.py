@@ -71,8 +71,20 @@ def load_and_prepare_data():
     df = pd.read_csv(DATA_PATH)
     logger.info(f"Loaded {len(df)} records with {len(df.columns)} columns")
     
-    # Parse dates
-    df['date'] = pd.to_datetime(df['date'])
+    # Parse dates with flexible format handling
+    # Use 'mixed' format to handle inconsistent date formats in the dataset
+    try:
+        df['date'] = pd.to_datetime(df['date'], format='mixed', errors='coerce')
+    except:
+        # Fallback: let pandas infer the format
+        df['date'] = pd.to_datetime(df['date'], errors='coerce')
+    
+    # Drop any rows where date parsing failed
+    initial_count = len(df)
+    df = df.dropna(subset=['date'])
+    if len(df) < initial_count:
+        logger.warning(f"Dropped {initial_count - len(df)} rows with invalid dates")
+    
     logger.info(f"Date range: {df['date'].min()} to {df['date'].max()}")
     
     # Define columns
@@ -91,83 +103,132 @@ def load_and_prepare_data():
     dates = df['date'].copy()
     metadata = df[metadata_cols].copy()
     
-    # ====== DATA CLEANING ======
-    logger.info("Performing data quality checks...")
+    # ====== DATA CLEANING FOR TRAINING ======
+    logger.info("\n" + "="*60)
+    logger.info("PERFORMING DATA QUALITY CHECKS AND CLEANING")
+    logger.info("="*60)
     
-    # 1. Check for infinite values
+    initial_rows = len(X)
+    logger.info(f"Initial dataset size: {initial_rows} rows, {len(feature_cols)} features")
+    
+    # 1. Check for and handle infinite values
     inf_counts = np.isinf(X).sum()
     if inf_counts.sum() > 0:
         logger.warning(f"Found {inf_counts.sum()} infinite values across {(inf_counts > 0).sum()} features")
-        logger.info("Features with infinite values:")
-        for col in inf_counts[inf_counts > 0].index:
+        logger.info("Features with infinite values (top 10):")
+        for col in inf_counts[inf_counts > 0].nlargest(10).index:
             logger.info(f"  {col}: {inf_counts[col]} inf values")
         
-        # Replace inf with NaN (will be handled next)
         logger.info("Replacing infinite values with NaN...")
         X.replace([np.inf, -np.inf], np.nan, inplace=True)
+    else:
+        logger.info("✓ No infinite values found")
     
-    # 2. Check for NaN values
+    # 2. Check NaN statistics BEFORE cleaning
     nan_counts = X.isna().sum()
     nan_target = y.isna().sum()
     
-    if nan_counts.sum() > 0 or nan_target > 0:
-        logger.warning(f"Found {nan_counts.sum()} NaN values in features, {nan_target} NaN in target")
-        
-        # Log features with high NaN percentage
-        nan_pct = (nan_counts / len(X)) * 100
-        high_nan_features = nan_pct[nan_pct > 5]
-        if len(high_nan_features) > 0:
-            logger.warning(f"Features with >5% NaN values:")
-            for col, pct in high_nan_features.items():
-                logger.warning(f"  {col}: {pct:.2f}%")
-        
-        # Drop rows with any NaN
-        logger.info("Dropping rows with NaN values...")
-        valid_idx = ~(X.isna().any(axis=1) | y.isna())
-        X = X[valid_idx]
-        y = y[valid_idx]
-        dates = dates[valid_idx]
-        metadata = metadata[valid_idx]
-        logger.info(f"Remaining records after NaN removal: {len(X)}")
+    logger.info(f"\nNaN Statistics (before cleaning):")
+    logger.info(f"  Total feature NaNs: {nan_counts.sum()}")
+    logger.info(f"  Features with NaNs: {(nan_counts > 0).sum()} of {len(feature_cols)}")
+    logger.info(f"  Target NaNs: {nan_target}")
     
-    # 3. Check for extreme outliers (beyond reasonable bounds)
-    logger.info("Checking for extreme outliers...")
-    extreme_outliers = {}
-    for col in X.columns:
-        q1, q99 = X[col].quantile([0.01, 0.99])
-        extreme_low = (X[col] < q1 - 10 * (q99 - q1)).sum()
-        extreme_high = (X[col] > q99 + 10 * (q99 - q1)).sum()
-        if extreme_low > 0 or extreme_high > 0:
-            extreme_outliers[col] = {'low': extreme_low, 'high': extreme_high}
+    # Show features with high NaN counts
+    high_nan_features = nan_counts[nan_counts > initial_rows * 0.05].sort_values(ascending=False)
+    if len(high_nan_features) > 0:
+        logger.info(f"\nFeatures with >5% NaN values:")
+        for col, count in high_nan_features.head(10).items():
+            pct = (count / initial_rows) * 100
+            logger.info(f"  {col}: {count} ({pct:.1f}%)")
     
-    if extreme_outliers:
-        logger.warning(f"Found extreme outliers in {len(extreme_outliers)} features")
-        for col, counts in list(extreme_outliers.items())[:5]:  # Show first 5
-            logger.warning(f"  {col}: {counts['low']} low, {counts['high']} high")
-        if len(extreme_outliers) > 5:
-            logger.warning(f"  ... and {len(extreme_outliers) - 5} more features")
+    # 3. Intelligent NaN handling strategy
+    logger.info("\nApplying intelligent NaN handling strategy...")
     
-    # 4. Verify target is reasonable
-    target_outliers = (np.abs(y) > 0.2).sum()  # Returns > 20% are extreme for daily
-    if target_outliers > 0:
-        logger.warning(f"Found {target_outliers} target values with |return| > 20%")
-        logger.info(f"Max absolute return: {np.abs(y).max():.4f}")
+    # Strategy A: Drop columns with >95% NaN (essentially useless)
+    nan_threshold_drop = 0.95
+    cols_to_drop = nan_counts[nan_counts > initial_rows * nan_threshold_drop].index.tolist()
     
-    # Final statistics
-    logger.info(f"\nFinal cleaned dataset: {X.shape[0]} samples, {X.shape[1]} features")
-    logger.info(f"Target statistics:")
-    logger.info(f"  Mean:   {y.mean():.6f}")
-    logger.info(f"  Std:    {y.std():.6f}")
-    logger.info(f"  Min:    {y.min():.6f}")
-    logger.info(f"  Max:    {y.max():.6f}")
-    logger.info(f"  Median: {y.median():.6f}")
+    if cols_to_drop:
+        logger.info(f"Dropping {len(cols_to_drop)} columns with >{nan_threshold_drop*100}% NaN:")
+        for col in cols_to_drop:
+            pct = (nan_counts[col] / initial_rows) * 100
+            logger.info(f"  {col}: {pct:.1f}% NaN")
+        X = X.drop(columns=cols_to_drop)
+        feature_cols = [col for col in feature_cols if col not in cols_to_drop]
+        logger.info(f"Remaining features: {len(X.columns)}")
     
-    # Verify no issues remain
-    assert not np.isinf(X.values).any(), "Infinite values still present after cleaning"
-    assert not X.isna().any().any(), "NaN values still present after cleaning"
-    assert not y.isna().any(), "NaN values in target after cleaning"
+    # Strategy B: Forward-fill NaN in rolling window features (ma_, ema_, rolling_, lag_, etc.)
+    # These have NaN at the start due to insufficient lookback
+    rolling_pattern_cols = [col for col in X.columns if any(
+        pattern in col for pattern in ['ma_', 'ema_', 'rolling_', 'lag_', 'momentum_', 'rsi_', 'macd', 'atr_', 'bb_', 'obv', 'vpt']
+    )]
     
-    logger.info("✓ Data quality checks passed")
+    if rolling_pattern_cols:
+        logger.info(f"\nForward-filling NaN in {len(rolling_pattern_cols)} rolling/technical indicator features...")
+        nan_before = X[rolling_pattern_cols].isna().sum().sum()
+        X[rolling_pattern_cols] = X[rolling_pattern_cols].fillna(method='ffill')
+        # Backward fill any remaining NaN at the very start
+        X[rolling_pattern_cols] = X[rolling_pattern_cols].fillna(method='bfill')
+        nan_after = X[rolling_pattern_cols].isna().sum().sum()
+        logger.info(f"  NaN values filled: {nan_before} → {nan_after}")
+    
+    # Strategy C: Drop rows with NaN in remaining features (basic features like price, volume)
+    logger.info("\nDropping rows with NaN in basic features or target...")
+    
+    remaining_nan = X.isna().sum()
+    if remaining_nan.sum() > 0:
+        logger.info(f"Remaining NaN in {(remaining_nan > 0).sum()} features:")
+        for col, count in remaining_nan[remaining_nan > 0].head(10).items():
+            pct = (count / len(X)) * 100
+            logger.info(f"  {col}: {count} ({pct:.1f}%)")
+    
+    valid_idx = ~(X.isna().any(axis=1) | y.isna())
+    
+    X = X[valid_idx].reset_index(drop=True)
+    y = y[valid_idx].reset_index(drop=True)
+    dates = dates[valid_idx].reset_index(drop=True)
+    metadata = metadata[valid_idx].reset_index(drop=True)
+    
+    rows_dropped = initial_rows - len(X)
+    logger.info(f"Dropped {rows_dropped} rows ({rows_dropped/initial_rows*100:.1f}%)")
+    logger.info(f"✓ Final training set: {len(X)} samples")
+    
+    # 4. Verify data quality after cleaning
+    assert not np.isinf(X.values).any(), "ERROR: Infinite values still present after cleaning!"
+    assert not X.isna().any().any(), "ERROR: NaN values in features after cleaning!"
+    assert not y.isna().any(), "ERROR: NaN values in target after cleaning!"
+    
+    logger.info("\n✓ All data quality checks passed")
+    
+    # 5. Check for extreme outliers in target
+    target_stats = {
+        'mean': y.mean(),
+        'std': y.std(),
+        'min': y.min(),
+        'max': y.max(),
+        'median': y.median(),
+        'q01': y.quantile(0.01),
+        'q99': y.quantile(0.99)
+    }
+    
+    extreme_returns = (np.abs(y) > 0.2).sum()
+    if extreme_returns > 0:
+        logger.warning(f"Found {extreme_returns} target values with |return| > 20%")
+    
+    # 6. Final statistics
+    logger.info(f"\nFinal cleaned dataset:")
+    logger.info(f"  Shape: {X.shape[0]} samples × {X.shape[1]} features")
+    logger.info(f"  Date range: {dates.min()} to {dates.max()}")
+    logger.info(f"\nTarget (next-day return) statistics:")
+    logger.info(f"  Mean:     {target_stats['mean']:>10.6f}")
+    logger.info(f"  Std:      {target_stats['std']:>10.6f}")
+    logger.info(f"  Min:      {target_stats['min']:>10.6f}")
+    logger.info(f"  1st %ile: {target_stats['q01']:>10.6f}")
+    logger.info(f"  Median:   {target_stats['median']:>10.6f}")
+    logger.info(f"  99th %ile:{target_stats['q99']:>10.6f}")
+    logger.info(f"  Max:      {target_stats['max']:>10.6f}")
+    
+    logger.info("="*60 + "\n")
     
     return X, y, dates, feature_cols, metadata
 
@@ -246,6 +307,52 @@ def train_baseline_model(X_train, y_train):
     return gbr_baseline
 
 
+def load_optimal_hyperparameters():
+    """
+    Load previously discovered optimal hyperparameters from model metadata.
+    
+    Returns:
+        dict or None: Optimal hyperparameters if available, else None
+    """
+    metadata_path = MODELS_DIR / "model_metadata.json"
+    
+    if not metadata_path.exists():
+        logger.info("No previous model metadata found - using default hyperparameters")
+        return None
+    
+    try:
+        with open(metadata_path, 'r') as f:
+            metadata = json.load(f)
+        
+        # Extract hyperparameters
+        hyperparams = metadata.get('hyperparameters', {})
+        
+        # Filter to only GBR-specific parameters (exclude sklearn internals)
+        gbr_params = {
+            'n_estimators': hyperparams.get('n_estimators'),
+            'learning_rate': hyperparams.get('learning_rate'),
+            'max_depth': hyperparams.get('max_depth'),
+            'min_samples_split': hyperparams.get('min_samples_split'),
+            'min_samples_leaf': hyperparams.get('min_samples_leaf'),
+            'subsample': hyperparams.get('subsample'),
+            'max_features': hyperparams.get('max_features')
+        }
+        
+        # Check if we have valid parameters
+        if all(v is not None for v in gbr_params.values()):
+            logger.info("Loaded optimal hyperparameters from previous tuning:")
+            for key, value in gbr_params.items():
+                logger.info(f"  {key}: {value}")
+            return gbr_params
+        else:
+            logger.info("Previous hyperparameters incomplete - using defaults")
+            return None
+            
+    except Exception as e:
+        logger.warning(f"Error loading previous hyperparameters: {e}")
+        return None
+
+
 def train_tuned_model(X_train, y_train, quick=True):
     """
     Train GBR model with recommended or tuned hyperparameters.
@@ -253,27 +360,47 @@ def train_tuned_model(X_train, y_train, quick=True):
     Args:
         X_train: Training features
         y_train: Training target
-        quick: If True, use recommended params; if False, perform GridSearch
+        quick: If True, use recommended/previous params; if False, perform GridSearch
     
     Returns:
         GradientBoostingRegressor: Trained model
     """
     if quick:
-        logger.info("Training with recommended hyperparameters (quick mode)...")
+        logger.info("Training in quick mode...")
         
-        gbr = GradientBoostingRegressor(
-            n_estimators=300,
-            learning_rate=0.05,
-            max_depth=4,
-            min_samples_split=10,
-            min_samples_leaf=4,
-            subsample=0.8,
-            max_features='sqrt',
-            random_state=RANDOM_SEED,
-            verbose=1,
-            validation_fraction=0.1,
-            n_iter_no_change=20
-        )
+        # Try to load previously tuned hyperparameters
+        optimal_params = load_optimal_hyperparameters()
+        
+        if optimal_params:
+            logger.info("Using previously discovered optimal hyperparameters")
+            gbr = GradientBoostingRegressor(
+                n_estimators=optimal_params['n_estimators'],
+                learning_rate=optimal_params['learning_rate'],
+                max_depth=optimal_params['max_depth'],
+                min_samples_split=optimal_params['min_samples_split'],
+                min_samples_leaf=optimal_params['min_samples_leaf'],
+                subsample=optimal_params['subsample'],
+                max_features=optimal_params['max_features'],
+                random_state=RANDOM_SEED,
+                verbose=1,
+                validation_fraction=0.1,
+                n_iter_no_change=20
+            )
+        else:
+            logger.info("Using default recommended hyperparameters")
+            gbr = GradientBoostingRegressor(
+                n_estimators=300,
+                learning_rate=0.05,
+                max_depth=4,
+                min_samples_split=10,
+                min_samples_leaf=4,
+                subsample=0.8,
+                max_features='sqrt',
+                random_state=RANDOM_SEED,
+                verbose=1,
+                validation_fraction=0.1,
+                n_iter_no_change=20
+            )
         
         gbr.fit(X_train, y_train)
         logger.info("Quick training complete")
@@ -309,8 +436,15 @@ def train_tuned_model(X_train, y_train, quick=True):
         
         grid_search.fit(X_train, y_train)
         
-        logger.info(f"Best parameters: {grid_search.best_params_}")
+        logger.info(f"\n{'='*60}")
+        logger.info("HYPERPARAMETER TUNING RESULTS")
+        logger.info(f"{'='*60}")
+        logger.info(f"Best parameters found:")
+        for param, value in grid_search.best_params_.items():
+            logger.info(f"  {param}: {value}")
         logger.info(f"Best CV MSE: {-grid_search.best_score_:.6f}")
+        logger.info(f"\nThese parameters will be used for future --quick training")
+        logger.info(f"{'='*60}\n")
         
         return grid_search.best_estimator_
 
