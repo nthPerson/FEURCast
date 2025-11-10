@@ -6,3 +6,4 @@ ai_context
 *cpython*
 .streamlit.secrets.toml
 .venv
+streamlit/production/pred_model/logs/data_update_20251109.log
