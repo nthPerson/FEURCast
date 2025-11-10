@@ -25,6 +25,7 @@ import numpy as np
 import pandas as pd
 from typing import List, Tuple
 import os
+from pathlib import Path
 
 # ----------------------------
 # Utilities
@@ -274,17 +275,16 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     return p.parse_args(argv)
 
 def main(argv: List[str]) -> int:
-    # args = parse_args(argv)  # using hard-coded path instead
-
-    #### Input and output paths ####
-    # SPLG_DATA_IN = "/home/robert/FEURCast/data/SPLG_history_full.csv"
-    SPLG_DATA_IN = "../../../data/SPLG_history_full.csv"
-    # SPLG_DATA_IN = "../../data/SPLG_history_full.csv"
-    DATA_OUT_DIR = "../../../data"  # Points to /data directory
-    # DATA_OUT_DIR = "data_out"
+    # Resolve paths relative to this script's location
+    SCRIPT_DIR = Path(__file__).parent
+    DATA_DIR = SCRIPT_DIR.parent.parent.parent / "data"
+    SPLG_DATA_IN = DATA_DIR / "SPLG_history_full.csv"
+    
+    # Output to pred_model/data_out directory
+    DATA_OUT_DIR = SCRIPT_DIR / "data_out"
     os.makedirs(DATA_OUT_DIR, exist_ok=True)
-    OUT_CSV_PATH = os.path.join(DATA_OUT_DIR, "rich_features_SPLG_history_full.csv")
-
+    OUT_CSV_PATH = DATA_OUT_DIR / "rich_features_SPLG_history_full.csv"
+    
     # Read
     df_raw = pd.read_csv(SPLG_DATA_IN)
     print(f'##### Raw sample: {df_raw.head()}')
