@@ -1,6 +1,9 @@
 ---
 name: Manual Model Retrain
 
+permissions:
+  contents: write
+
 on:
   workflow_dispatch:
     inputs:
