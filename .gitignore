@@ -6,3 +6,16 @@ ai_context
 *cpython*
 .streamlit.secrets.toml
 .venv
+
+# Allow model artifacts to be committed (GitHub Actions)
+!streamlit/production/pred_model/models/*.pkl
+!streamlit/production/pred_model/models/*.json
+!streamlit/production/pred_model/logs/training_history.jsonl
+
+# But ignore temporary logs (GitHub Actions)
+streamlit/production/pred_model/logs/*_*.log
+streamlit/production/pred_model/logs/*_*.txt
+
+# Allow data files (GitHub Actions)
+!data/SPLG_history_full.csv
+!data/rich_features_SPLG_history_full.csv

@@ -1,0 +1,62 @@
+name: Manual Model Retrain
+
+on:
+  workflow_dispatch:
+    inputs:
+      training_mode:
+        description: 'Training mode'
+        required: true
+        default: 'quick'
+        type: choice
+        options:
+          - quick
+          - full
+      force_retrain:
+        description: 'Force retrain even if no new data'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  retrain:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: pip install -r requirements.txt
+    
+    - name: Run update and retrain
+      working-directory: streamlit/production/pred_model
+      run: |
+        FLAGS=""
+        if [ "${{ inputs.training_mode }}" = "quick" ]; then
+          FLAGS="$FLAGS --quick"
+        fi
+        if [ "${{ inputs.force_retrain }}" = "true" ]; then
+          FLAGS="$FLAGS --force"
+        fi
+        python update_and_retrain.py $FLAGS
+    
+    - name: Commit and push changes
+      run: |
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+        git add data/ streamlit/production/pred_model/
+        git diff --staged --quiet || git commit -m "Manual retrain: ${{ inputs.training_mode }} mode"
+        git push
+    
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: manual-training-${{ github.run_number }}
+        path: |
+          streamlit/production/pred_model/logs/
+          streamlit/production/pred_model/plots/
