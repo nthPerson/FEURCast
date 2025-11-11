@@ -78,3 +78,11 @@ jobs:
             body: `Automated model retraining failed on ${new Date().toISOString()}\n\nCheck the [workflow run](${context.payload.repository.html_url}/actions/runs/${context.runId}) for details.`,
             labels: ['automated', 'model-training', 'bug']
           })
+
+    - name: Workflow summary
+      if: always()
+      run: |
+        echo "### Workflow Completed! :rocket:" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Duration:** $(date -u -d @${SECONDS} +%M:%S)" >> $GITHUB_STEP_SUMMARY
+        echo "**Status:** ${{ job.status }}" >> $GITHUB_STEP_SUMMARY

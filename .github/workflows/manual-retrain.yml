@@ -60,3 +60,11 @@ jobs:
         path: |
           streamlit/production/pred_model/logs/
           streamlit/production/pred_model/plots/
+
+    - name: Workflow summary
+      if: always()
+      run: |
+        echo "### Workflow Completed! :rocket:" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Duration:** $(date -u -d @${SECONDS} +%M:%S)" >> $GITHUB_STEP_SUMMARY
+        echo "**Status:** ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
