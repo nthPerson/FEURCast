@@ -47,10 +47,12 @@ jobs:
 
       - name: Commit and push changes
         run: |
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.email \
+            "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add data/ streamlit/production/pred_model/
-          git diff --staged --quiet || git commit -m "Manual retrain: ${{ inputs.training_mode }} mode"
+          git diff --staged --quiet || git commit -m \
+            "Manual retrain: ${{ inputs.training_mode }} mode"
           git push
 
       - name: Upload artifacts
@@ -66,5 +68,6 @@ jobs:
         run: |
           echo "### Workflow Completed! :rocket:" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Duration:** $(date -u -d @${SECONDS} +%M:%S)" >> $GITHUB_STEP_SUMMARY
+          echo "**Duration:** $(date -u -d @${SECONDS} +%M:%S)" >> \
+            $GITHUB_STEP_SUMMARY
           echo "**Status:** ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
