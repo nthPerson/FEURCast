@@ -185,7 +185,7 @@ Make the prediction realistic based on current market conditions. Features shoul
                     {'name': 'Volume_ratio', 'importance': 0.09}
                 ]
             }
-def create_price_chart(metric, start_date, end_date):
+def create_price_chart(metric, start_date, end_date, show_events: bool = True):
     # Mapping between display names and DataFrame columns
     metric_mapping = {
         "Closing": "close",
@@ -229,15 +229,153 @@ def create_price_chart(metric, start_date, end_date):
         "current_price": "Daily Current"
     }
     display_name = metric if metric in metric_mapping else display_names.get(metric, metric.capitalize())
-    
-    fig = px.line(
-        df,
-        x='date',
-        y=df_column,
+
+    # --- Integrate Financial Crises events for hover display (CSV or XLSX) ---
+    events_df = None
+    event_label = 'Event'
+    category_label = 'Category'
+    impact_label = 'Impact'
+
+    if show_events:
+        data_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'data')
+        # try to find a file that looks like the financial crises timeline (either csv or xlsx)
+        events_file = None
+        try:
+            for f in os.listdir(data_dir):
+                if 'financial' in f.lower() and ('crisis' in f.lower() or 'crises' in f.lower() or 'timeline' in f.lower()):
+                    if f.lower().endswith(('.csv', '.xlsx', '.xls')):
+                        events_file = os.path.join(data_dir, f)
+                        break
+
+            if events_file is None:
+                raise FileNotFoundError("No financial events file found in data directory")
+
+            if events_file.lower().endswith('.csv'):
+                raw_events = pd.read_csv(events_file, dtype=str, encoding='utf-8', low_memory=False)
+            else:
+                raw_events = pd.read_excel(events_file, dtype=str)
+
+            # Normalize column names to lowercase for detection
+            cols_lower = {c: c.lower() for c in raw_events.columns}
+
+            # find a date column (common names include 'date' or the verbose CSV header)
+            date_col = None
+            for orig, low in cols_lower.items():
+                if 'date' in low or 'year' in low or 'day' in low or 'period' in low:
+                    date_col = orig
+                    break
+            if date_col is None:
+                # fallback to first column if detection fails
+                date_col = raw_events.columns[0]
+
+            # detect event / category / impact columns (prefer exact headers in your CSV)
+            def find_col_like(key_words):
+                for orig, low in cols_lower.items():
+                    for kw in key_words:
+                        if kw in low:
+                            return orig
+                return None
+
+            event_col_name = find_col_like(['event', 'description', 'title', 'name'])
+            category_col_name = find_col_like(['category', 'type'])
+            impact_col_name = find_col_like(['impact', 'economic', 'market', 'effect', 's&p'])
+
+            # Use the detected original headers as labels for hover text
+            event_label = event_col_name if event_col_name is not None else 'Event'
+            category_label = category_col_name if category_col_name is not None else 'Category'
+            impact_label = impact_col_name if impact_col_name is not None else 'Impact'
+
+            # Build normalized events_df with predictable column names
+            events_df = pd.DataFrame()
+            events_df['event_date'] = pd.to_datetime(raw_events[date_col].astype(str), errors='coerce')
+            events_df['event'] = raw_events[event_col_name].fillna('').astype(str) if event_col_name is not None else ''
+            events_df['category'] = raw_events[category_col_name].fillna('').astype(str) if category_col_name is not None else ''
+            events_df['impact'] = raw_events[impact_col_name].fillna('').astype(str) if impact_col_name is not None else ''
+
+            events_df = events_df.dropna(subset=['event_date']).sort_values('event_date').reset_index(drop=True)
+        except Exception:
+            events_df = None
+            event_label = event_label or 'Event'
+            category_label = category_label or 'Category'
+            impact_label = impact_label or 'Impact'
+
+    # Merge events onto price df: prefer exact date matches, fall back to nearest within 3 days
+    if show_events and events_df is not None and not events_df.empty:
+        df_sorted = df.sort_values('date').reset_index(drop=True)
+        ev_sorted = events_df.sort_values('event_date').reset_index(drop=True).rename(columns={'event_date': 'date'})
+
+        # exact merge first
+        merged = df_sorted.merge(ev_sorted, on='date', how='left')
+
+        # where exact match is missing, fill from nearest within 3 days using merge_asof
+        if merged[['event', 'category', 'impact']].isna().any().any():
+            asof = pd.merge_asof(df_sorted, ev_sorted, on='date', direction='nearest', tolerance=pd.Timedelta(days=3))
+            for col in ['event', 'category', 'impact']:
+                merged[col] = merged[col].fillna(asof[col])
+
+        # Ensure no NaNs (use empty string)
+        merged[['event', 'category', 'impact']] = merged[['event', 'category', 'impact']].fillna('').astype(str)
+        plot_df = merged
+    else:
+        # no events or user disabled: create empty columns for consistent plotting
+        plot_df = df.copy()
+        plot_df['event'] = ''
+        plot_df['category'] = ''
+        plot_df['impact'] = ''
+        # labels remain default
+
+    # Build customdata for hovertemplate
+    customdata_all = plot_df[['event', 'category', 'impact']].astype(str).values
+
+    # Boolean mask for rows that have an event
+    has_event = plot_df['event'].astype(str).str.strip() != ''
+
+    y_series = plot_df[df_column]
+
+    # y values for event-only trace (non-event -> NaN so Plotly won't draw/hover)
+    y_for_events = y_series.where(has_event, np.nan)
+
+    # Base figure: thin muted line for all dates (no event details)
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=plot_df['date'],
+        y=y_series,
+        mode='lines',
+        name=display_name,
+        line=dict(width=1, color='lightgrey'),
+        hoverinfo='x+y',
+        hovertemplate=(
+            "Date: %{x|%Y-%m-%d}<br>"
+            f"{display_name} Price: $%{{y:.2f}}<extra></extra>"
+        )
+    ))
+
+    # Overlay: bold line+markers only on event dates, show event details in hover
+    # add overlay only if show_events is True
+    if show_events:
+        fig.add_trace(go.Scatter(
+            x=plot_df['date'],
+            y=y_for_events,
+            mode='lines+markers',
+            name='Event (highlight)',
+            line=dict(width=2, color='crimson'),  # adjust thickness here
+            marker=dict(size=6, color='crimson'),
+            customdata=customdata_all,
+            hovertemplate=(
+                "Date: %{x|%Y-%m-%d}<br>"
+                f"{display_name} Price: $%{{y:.2f}}<br>"
+                f"{event_label}: %{{customdata[0]}}<br>"
+                f"{category_label}: %{{customdata[1]}}<br>"
+                f"{impact_label}: %{{customdata[2]}}<extra></extra>"
+            )
+        ))
+
+    fig.update_layout(
         title=f"{display_name} Price from {start_date.date()} to {end_date.date()}",
-        labels={'date': 'Date', df_column: f'{display_name} Price ($)'}
+        xaxis_title='Date',
+        yaxis_title=f'{display_name} Price ($)',
+        template='plotly_white'
     )
-    fig.update_layout(template='plotly_white')
     return fig
 
 

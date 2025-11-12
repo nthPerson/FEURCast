@@ -77,6 +77,9 @@ def initialize_session_state():
     if "max_dataset_date" not in st.session_state:
         st.session_state.max_dataset_date = get_latest_date_in_dataset()
         # st.session_state.max_dataset_date = pd.to_datetime("2025-09-24")
+    # New: control whether event highlights are shown
+    if "show_events" not in st.session_state:
+        st.session_state.show_events = True
 
 
 # ---------- SIDEBAR ----------
@@ -98,6 +101,16 @@ def render_sidebar():
             index=["Closing", "Opening", "Daily High", "Daily Low", "Daily Current"].index(st.session_state.metric),
             key="metric_selector"
         )
+
+        # New: radio to toggle event highlight on/off
+        show_choice = st.radio(
+            "Show Event Highlights",
+            options=["On", "Off"],
+            index=0 if st.session_state.show_events else 1,
+            key="show_events_radio",
+            help="Toggle red event-highlighted trace that shows event details on hover"
+        )
+        st.session_state.show_events = (show_choice == "On")
 
         # Define the maximum available date from our dataset (last available date in historical data)
         MAX_DATASET_DATE = pd.to_datetime(get_latest_date_in_dataset())
@@ -426,7 +439,8 @@ def render_lite_mode():
         try:
             # Map display name to DataFrame column name
             df_column = st.session_state.metric_mapping[metric]
-            fig = create_price_chart(df_column, pd.to_datetime(start_date), pd.to_datetime(end_date))
+            # Pass show_events flag from session state
+            fig = create_price_chart(df_column, pd.to_datetime(start_date), pd.to_datetime(end_date), show_events=st.session_state.show_events)
             st.plotly_chart(fig, config={"responsive": True, "width": 'stretch'}, key='price_chart')
         except Exception as e:
             st.error(f"❌ Chart failed to render: {e}")
@@ -702,7 +716,7 @@ def render_pro_mode():
         else:
             # Default to price chart - FIX: Add all required parameters
             default_start = max_dataset_date - pd.Timedelta(days=180)
-            fig = create_price_chart('close', default_start, max_dataset_date)
+            fig = create_price_chart('close', default_start, max_dataset_date, show_events=st.session_state.show_events)
             st.plotly_chart(fig, config={"width": 'stretch'}, key='price_chart')
     
     elif not query and submit:
@@ -744,7 +758,8 @@ def render_pro_mode():
         end_date = st.session_state.end_date
         # Map display name to DataFrame column name
         df_column = st.session_state.metric_mapping[metric]
-        fig = create_price_chart(df_column, pd.to_datetime(start_date), pd.to_datetime(end_date))
+        # Pass show_events flag
+        fig = create_price_chart(df_column, pd.to_datetime(start_date), pd.to_datetime(end_date), show_events=st.session_state.show_events)
         st.plotly_chart(fig, config={"width": 'stretch'}, key='price_chart_2')
     
     with tab4:
