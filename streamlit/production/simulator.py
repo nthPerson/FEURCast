@@ -337,12 +337,16 @@ def create_price_chart(metric, start_date, end_date, show_events: bool = True):
 
     # Base figure: thin muted line for all dates (no event details)
     fig = go.Figure()
+
+    # make Closing line darker
+    base_line_color = 'dimgray' if df_column in ('close', 'Closing') else 'lightgrey'
+
     fig.add_trace(go.Scatter(
         x=plot_df['date'],
         y=y_series,
         mode='lines',
         name=display_name,
-        line=dict(width=1, color='lightgrey'),
+        line=dict(width=1, color=base_line_color),
         hoverinfo='x+y',
         hovertemplate=(
             "Date: %{x|%Y-%m-%d}<br>"
@@ -370,11 +374,49 @@ def create_price_chart(metric, start_date, end_date, show_events: bool = True):
             )
         ))
 
+    # place title slightly higher so "Closing Price from..." sits up one line
     fig.update_layout(
-        title=f"{display_name} Price from {start_date.date()} to {end_date.date()}",
+        title=dict(
+            text=f"{display_name} Price from {start_date.date()} to {end_date.date()}",
+            x=0.01,
+            xanchor='left',
+            y=0.995,
+            yanchor='top',
+            font=dict(size=16)
+        ),
         xaxis_title='Date',
         yaxis_title=f'{display_name} Price ($)',
-        template='plotly_white'
+        template='plotly_white',
+        plot_bgcolor='white',
+        legend_title_text="Click on a line below to show/unshow on chart",
+        # reduced top margin since annotations were removed
+        margin=dict(t=80),
+        legend=dict(
+            orientation='h',
+            y=1.03,
+            x=0,
+            xanchor='left',
+            yanchor='bottom'
+        )
+    )
+
+    # Darker gridlines (increase opacity + slightly thicker)
+    dark_grid = 'rgba(80,80,80,0.18)'   # darker/more visible grid color
+    dark_zeroline = 'rgba(0,0,0,0.06)'
+
+    fig.update_xaxes(
+        showgrid=True,
+        gridcolor=dark_grid,
+        gridwidth=1.2,
+        zeroline=True,
+        zerolinecolor=dark_zeroline
+    )
+    fig.update_yaxes(
+        showgrid=True,
+        gridcolor=dark_grid,
+        gridwidth=1.2,
+        zeroline=True,
+        zerolinecolor=dark_zeroline
     )
     return fig
 
