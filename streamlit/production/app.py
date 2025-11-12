@@ -8,7 +8,25 @@ from datetime import datetime
 import sys
 import os
 import pandas as pd
+import io
+from PIL import Image
 
+# Safe rerun helper to support Streamlit versions where experimental_rerun / rerun may be missing
+def safe_rerun():
+    """
+    Attempt to trigger a Streamlit rerun in a way that's compatible across versions.
+    Falls back to st.stop() if no programmatic rerun API is available.
+    """
+    try:
+        # Preferred: modern Streamlit
+        st.experimental_rerun()
+    except Exception:
+        try:
+            # Older Streamlit versions
+            st.rerun()
+        except Exception:
+            # Final fallback: stop the script so the UI can be refreshed by the user
+            st.stop()
 # Import from pred_model package
 from pred_model import get_latest_date_in_dataset
 
@@ -80,6 +98,9 @@ def initialize_session_state():
     # New: control whether event highlights are shown
     if "show_events" not in st.session_state:
         st.session_state.show_events = True
+    # New: current page for simple navigation ('home' or 'performance')
+    if "page" not in st.session_state:
+        st.session_state.page = "home"
 
 
 # ---------- SIDEBAR ----------
@@ -102,15 +123,17 @@ def render_sidebar():
             key="metric_selector"
         )
 
-        # New: radio to toggle event highlight on/off
-        show_choice = st.radio(
-            "Show Event Highlights",
-            options=["On", "Off"],
-            index=0 if st.session_state.show_events else 1,
-            key="show_events_radio",
-            help="Toggle red event-highlighted trace that shows event details on hover"
-        )
-        st.session_state.show_events = (show_choice == "On")
+        # (Removed) Show Event Highlights control was here
+
+        # Navigation buttons: Home + Model Performance (stacked vertically)
+        if st.button("Home", key="sidebar_home"):
+            st.session_state.page = "home"
+            safe_rerun()
+        # small spacer between buttons
+        st.markdown("")
+        if st.button("Model Performance Metrics", key="open_model_perf"):
+            st.session_state.page = "performance"
+            safe_rerun()
 
         # Define the maximum available date from our dataset (last available date in historical data)
         MAX_DATASET_DATE = pd.to_datetime(get_latest_date_in_dataset())
@@ -582,7 +605,7 @@ def render_pro_mode():
         with col4:
             if st.button("🔄 Refresh", key="pro_refresh_button"):
                 st.session_state.prediction_cache = predict_splg()
-                st.rerun()
+                safe_rerun()
     
     st.markdown("---")
     
@@ -781,6 +804,12 @@ def render_pro_mode():
 def main():
     initialize_session_state()
     render_sidebar()
+
+    # Simple page routing
+    if st.session_state.page == "performance":
+        render_performance_page()
+        return
+
     if st.session_state.mode == 'Lite':
         render_lite_mode()
     else:
@@ -795,6 +824,138 @@ def main():
     </div>
     """, unsafe_allow_html=True)
 
+
+# --- remove or comment out any earlier immediate call to main() so functions defined later are available ---
+# if __name__ == "__main__":
+#     main()
+
+def render_performance_page():
+    """
+    Show model performance plots in tabs (like Quick Analytics).
+    Prefer dynamic plotting functions from pred_model.plots; fallback to PNGs
+    in pred_model/plots. Each plot gets its own tab for selection.
+    """
+    import inspect
+
+    st.markdown('<p class="main-header">📈 Model Performance Metrics</p>', unsafe_allow_html=True)
+    st.markdown("Select a plot tab to view. Prefer dynamically generated figures from pred_model.plots, otherwise show PNGs.")
+
+    items = []  # list of (label, fig_or_path)
+
+    # 1) Try to load plotting functions from pred_model.plots
+    try:
+        import pred_model.plots as perf_plots
+        preferred = [
+            "make_pred_vs_actual_figure",
+            "make_feature_importance_figure",
+            "make_residuals_figure",
+            "make_error_distribution_figure",
+            "make_training_validation_test_plots",
+        ]
+        added = set()
+        for name in preferred:
+            if hasattr(perf_plots, name) and callable(getattr(perf_plots, name)):
+                try:
+                    fig = getattr(perf_plots, name)()
+                    items.append((name, fig))
+                    added.add(name)
+                except Exception:
+                    pass
+
+        # auto-discover additional no-arg make_* functions
+        for n, fn in inspect.getmembers(perf_plots, inspect.isfunction):
+            if n.startswith("make_") and n not in added:
+                sig = inspect.signature(fn)
+                # allow functions with only optional args or *args/**kwargs
+                if all(p.default != inspect._empty or p.kind in (p.VAR_POSITIONAL, p.VAR_KEYWORD)
+                       for p in sig.parameters.values()):
+                    try:
+                        fig = fn()
+                        items.append((n, fig))
+                    except Exception:
+                        pass
+    except Exception:
+        # dynamic generation not available; we'll fallback to PNGs below
+        pass
+
+    # 2) Fallback: PNG files in pred_model/plots
+    if not items:
+        plots_dir = os.path.join(os.path.dirname(__file__), "pred_model", "plots")
+        if os.path.isdir(plots_dir):
+            png_files = sorted([f for f in os.listdir(plots_dir) if f.lower().endswith(".png")])
+            for fname in png_files:
+                items.append((os.path.splitext(fname)[0], os.path.join(plots_dir, fname)))
+
+    if not items:
+        st.info("No performance plots available (no dynamic functions and no PNGs found).")
+        if st.button("Back to Dashboard", key="back_from_perf"):
+            st.session_state.page = "home"
+            safe_rerun()
+        return
+
+    # Create tabs for each plot (like Quick Analytics)
+    tabs = st.tabs([label for label, _ in items])
+    for tab, (label, content) in zip(tabs, items):
+        with tab:
+            # Matplotlib-like figure (has savefig)
+            try:
+                if hasattr(content, "savefig"):
+                    buf = io.BytesIO()
+                    content.savefig(buf, format="png", bbox_inches="tight")
+                    buf.seek(0)
+                    st.image(buf, use_column_width=True)
+                    buf.close()
+                    continue
+            except Exception:
+                pass
+
+            # Plotly figure
+            try:
+                if isinstance(content, go.Figure):
+                    st.plotly_chart(content, use_container_width=True)
+                    continue
+            except Exception:
+                pass
+
+            # PNG file path
+            if isinstance(content, str) and os.path.isfile(content):
+                st.image(content, use_column_width=True)
+                continue
+
+            # bytes / raw image
+            if isinstance(content, (bytes, bytearray)):
+                st.image(content, use_column_width=True)
+                continue
+
+            st.warning(f"Could not render plot: {label}")
+
+    st.markdown("---")
+    if st.button("Back to Dashboard", key="back_from_perf"):
+        st.session_state.page = "home"
+        safe_rerun()
+def render_performance_page_dynamic():
+    st.markdown("Generated plots (no disk files).")
+
+    # example: call function that returns a Matplotlib fig object from pred_model.plots
+    try:
+        from pred_model.plots import make_pred_vs_actual_figure, make_feature_importance_figure
+        figs = [
+            ("Pred vs Actual", make_pred_vs_actual_figure()),
+            ("Feature Importance", make_feature_importance_figure()),
+        ]
+        for title, fig in figs:
+            st.markdown(f"**{title}**")
+            buf = io.BytesIO()
+            fig.savefig(buf, format='png', bbox_inches='tight')
+            buf.seek(0)
+            st.image(buf, use_column_width=True)
+            buf.close()
+    except Exception as e:
+        st.error(f"Could not generate plots dynamically: {e}")
+
+    if st.button("Back to Dashboard", key="back_from_perf"):
+        st.session_state.page = "home"
+        safe_rerun()
 
 if __name__ == "__main__":
     main()

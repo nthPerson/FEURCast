@@ -338,15 +338,16 @@ def create_price_chart(metric, start_date, end_date, show_events: bool = True):
     # Base figure: thin muted line for all dates (no event details)
     fig = go.Figure()
 
-    # make Closing line darker
-    base_line_color = 'dimgray' if df_column in ('close', 'Closing') else 'lightgrey'
+    # make base line darker for all selected metrics
+    base_line_color = 'dimgray'
+    base_line_width = 1.6
 
     fig.add_trace(go.Scatter(
         x=plot_df['date'],
         y=y_series,
         mode='lines',
         name=display_name,
-        line=dict(width=1, color=base_line_color),
+        line=dict(width=base_line_width, color=base_line_color),
         hoverinfo='x+y',
         hovertemplate=(
             "Date: %{x|%Y-%m-%d}<br>"
