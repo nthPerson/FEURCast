@@ -114,6 +114,26 @@ def render_sidebar():
             key="sidebar_mode_radio",  # ✅ unique key
             help="Lite: Basic prediction + charts\nPro: Full LLM interface + all tools"
         )
+        # Navigation buttons: Home + Model Performance (styled, centered)
+        # Inject sidebar-specific button styles (colors, sizing, boxed background)
+        st.markdown(
+            """
+        
+            """,
+            unsafe_allow_html=True,
+        )
+
+        # Place the two navigation buttons inside a small boxed area and center them
+        st.markdown('<div class="sidebar-button-box">', unsafe_allow_html=True)
+        col_l, col_c, col_r = st.columns([1, 6, 1])
+        with col_c:
+            if st.button("Home", key="sidebar_home", use_container_width=True):
+                st.session_state.page = "home"
+                safe_rerun()
+            if st.button("Model Performance Metrics", key="open_model_perf", use_container_width=True):
+                st.session_state.page = "performance"
+                safe_rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
 
         st.sidebar.header("Chart Filters")
         st.session_state.metric = st.selectbox(
@@ -124,16 +144,6 @@ def render_sidebar():
         )
 
         # (Removed) Show Event Highlights control was here
-
-        # Navigation buttons: Home + Model Performance (stacked vertically)
-        if st.button("Home", key="sidebar_home"):
-            st.session_state.page = "home"
-            safe_rerun()
-        # small spacer between buttons
-        st.markdown("")
-        if st.button("Model Performance Metrics", key="open_model_perf"):
-            st.session_state.page = "performance"
-            safe_rerun()
 
         # Define the maximum available date from our dataset (last available date in historical data)
         MAX_DATASET_DATE = pd.to_datetime(get_latest_date_in_dataset())
@@ -277,64 +287,6 @@ def render_lite_mode():
         )
         
     # =============================
-    # 🧠 S&P 500 (SPY) Sentiment Section
-    # =============================
-    st.markdown("---")
-    st.markdown("##### 🧠 S&P 500 (SPY) Sentiment Overview")
-
-    sentiment_url = f"https://finnhub.io/api/v1/news-sentiment?symbol=SPY&token={MARKETSENTIMENT_API_KEY}"
-
-    try:
-        sentiment_resp = requests.get(sentiment_url, timeout=5)
-        sentiment_data = sentiment_resp.json()
-    except Exception as e:
-        st.error(f"⚠️ Could not fetch sentiment data: {e}")
-        sentiment_data = {}
-
-    if sentiment_data and "companyNewsScore" in sentiment_data:
-        company_score = sentiment_data.get("companyNewsScore", 0)
-        sector_score = sentiment_data.get("sectorAverageNewsScore", 0)
-        bullish = sentiment_data.get("sentiment", {}).get("bullishPercent", 0)
-        bearish = sentiment_data.get("sentiment", {}).get("bearishPercent", 0)
-        buzz_articles = sentiment_data.get("buzz", {}).get("articlesInLastWeek", 0)
-        buzz_avg = sentiment_data.get("buzz", {}).get("weeklyAverage", 0)
-
-        col1, col2, col3 = st.columns(3)
-        col1.metric("📰 SPY News Score", f"{company_score:.2f}")
-        col2.metric("🏭 Sector Avg. Score", f"{sector_score:.2f}")
-        col3.metric("🔥 Buzz Activity", f"{buzz_articles}", f"Avg: {buzz_avg}")
-
-        col4, col5 = st.columns(2)
-        col4.metric("🐂 Bullish Sentiment", f"{bullish*100:.1f}%")
-        col5.metric("🐻 Bearish Sentiment", f"{bearish*100:.1f}%")
-
-
-        st.markdown("""
-        <style>
-            .sentiment-bar {height: 5px;width: 100%; background-color: #e9ecef;border-radius: 10px;overflow: hidden;margin-top: 5px;margin-bottom: 5px;}
-            .bullish {height: 100%;background-color: #28a745;float: left;text-align: center;color: white;line-height: 10px;font-weight: bold;}
-            .bearish {height: 100%;background-color: #dc3545;float: right;text-align: center;color: white;line-height: px;font-weight: bold;}
-        </style>
-        """, unsafe_allow_html=True)
-
-        st.markdown(f"""
-        <div class="sentiment-bar">
-            <div class="bullish" style="width:{bullish*100:.1f}%;">🐂 {bullish*100:.1f}%</div>
-            <div class="bearish" style="width:{bearish*100:.1f}%;">🐻 {bearish*100:.1f}%</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        if company_score > sector_score and bullish > bearish:
-            st.success(f"SPY shows stronger **bullish momentum** than its sector (score {company_score:.2f} vs {sector_score:.2f}).")
-        elif bearish > bullish:
-            st.warning(f"Bearish sentiment dominates for SPY ({bearish*100:.1f}% vs {bullish*100:.1f}%).")
-        else:
-            st.info(f"Mixed market tone detected for SPY ({bullish*100:.1f}% bullish vs {bearish*100:.1f}% bearish).")
-
-        st.caption("Source: [Finnhub News Sentiment API](https://finnhub.io/docs/api/news-sentiment)")
-    else:
-        st.warning("No sentiment data available for SPY at this time.")
-        # =============================
     # 🌍 Macro & Sentiment Dashboard (FRED + Sentiment Combined)
     # =============================
     import requests
@@ -450,7 +402,7 @@ def render_lite_mode():
 
     if start_date > end_date:
         st.error("🚫 Start date must be before end date.")
-        return
+        st.stop()
         
     # Ensure end date doesn't exceed dataset limit for price charts
     if end_date > max_date:
@@ -480,101 +432,6 @@ def render_lite_mode():
     4. Compare with recent price trends  
     *Educational use only.*
     """)
-
-
-# -----------------------------------------
-# Separate Helper Function for Sentiment + Macro
-# -----------------------------------------
-def render_sentiment_and_macro_dashboard():
-    import requests
-    import streamlit as st
-
-    MARKETSENTIMENT_API_KEY = "d46lnphr01qgc9etei60d46lnphr01qgc9etei6g"
-    sentiment_url = f"https://finnhub.io/api/v1/news-sentiment?symbol=SPY&token={MARKETSENTIMENT_API_KEY}"
-
-    try:
-        sentiment_resp = requests.get(sentiment_url, timeout=5)
-        sentiment_data = sentiment_resp.json()
-    except Exception as e:
-        st.error(f"⚠️ Could not fetch sentiment data: {e}")
-        sentiment_data = {}
-
-    if sentiment_data and "companyNewsScore" in sentiment_data:
-        company_score = sentiment_data.get("companyNewsScore", 0)
-        sector_score = sentiment_data.get("sectorAverageNewsScore", 0)
-        bullish = sentiment_data.get("sentiment", {}).get("bullishPercent", 0)
-        bearish = sentiment_data.get("sentiment", {}).get("bearishPercent", 0)
-        buzz_articles = sentiment_data.get("buzz", {}).get("articlesInLastWeek", 0)
-        buzz_avg = sentiment_data.get("buzz", {}).get("weeklyAverage", 0)
-
-        st.markdown("### 🧠 S&P 500 (SPY) Sentiment Overview")
-        col1, col2, col3 = st.columns(3)
-        col1.metric("📰 SPY News Score", f"{company_score:.2f}")
-        col2.metric("🏭 Sector Avg. Score", f"{sector_score:.2f}")
-        col3.metric("🔥 Buzz Activity", f"{buzz_articles}", f"Avg: {buzz_avg}")
-
-        col4, col5 = st.columns(2)
-        col4.metric("🐂 Bullish Sentiment", f"{bullish*100:.1f}%")
-        col5.metric("🐻 Bearish Sentiment", f"{bearish*100:.1f}%")
-
-        st.markdown(f"""
-        <div style='height:25px; width:100%; background-color:#e9ecef; border-radius:10px; overflow:hidden; margin-top:10px; margin-bottom:10px;'>
-            <div style='height:100%; width:{bullish*100:.1f}%; background-color:#28a745; float:left; text-align:center; color:white; line-height:25px; font-weight:bold;'>
-                🐂 {bullish*100:.1f}%
-            </div>
-            <div style='height:100%; width:{bearish*100:.1f}%; background-color:#dc3545; float:right; text-align:center; color:white; line-height:25px; font-weight:bold;'>
-                🐻 {bearish*100:.1f}%
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        if company_score > sector_score and bullish > bearish:
-            st.success(f"SPY shows stronger **bullish momentum** (score {company_score:.2f} vs {sector_score:.2f}).")
-        elif bearish > bullish:
-            st.warning(f"Bearish sentiment dominates ({bearish*100:.1f}% vs {bullish*100:.1f}%).")
-        else:
-            st.info(f"Mixed market tone ({bullish*100:.1f}% bullish vs {bearish*100:.1f}% bearish).")
-
-    else:
-        st.warning("No sentiment data available for SPY.")
-
-    # --- Macro Dashboard ---
-    render_macro_dashboard()
-
-
-def render_macro_dashboard():
-    import requests
-    import streamlit as st
-
-    FRED_KEY = "167c610d0808df0df6fc03d8a7c9f611"
-    base_url = "https://api.stlouisfed.org/fred/series/observations"
-
-    # Unemployment
-    params_un = {"series_id": "UNRATE", "api_key": FRED_KEY, "file_type": "json", "sort_order": "desc", "limit": 1}
-    try:
-        resp_un = requests.get(base_url, params=params_un, timeout=5)
-        data_un = resp_un.json().get("observations", [])
-        unemployment_rate = float(data_un[0].get("value", 0)) if data_un else None
-    except Exception:
-        unemployment_rate = None
-
-    # Debt to GDP
-    params_debt = {"series_id": "GFDEGDQ188S", "api_key": FRED_KEY, "file_type": "json", "sort_order": "desc", "limit": 1}
-    try:
-        resp_debt = requests.get(base_url, params=params_debt, timeout=5)
-        data_debt = resp_debt.json().get("observations", [])
-        public_debt_pct = float(data_debt[0].get("value", 0)) if data_debt else None
-    except Exception:
-        public_debt_pct = None
-
-    st.markdown("### 🌍 Macro & Sentiment Dashboard")
-
-    col1, col2, col3 = st.columns(3)
-    col1.metric("💼 Unemployment Rate", f"{unemployment_rate:.1f}%" if unemployment_rate else "N/A")
-    col2.metric("🏛️ Public Debt (% of GDP)", f"{public_debt_pct:.1f}%" if public_debt_pct else "N/A")
-    col3.metric("📊 Data Updated", "Realtime API")
-
-    st.markdown("---")
 
 
 # ---------- PRO MODE ----------
@@ -750,12 +607,12 @@ def render_pro_mode():
     st.markdown("### 📊 Quick Analytics")
     
     tab1, tab2, tab3, tab4 = st.tabs(["Sector Risk", "Holdings Detail", "Price Trends", "Feature Analysis"])
-    
+
     with tab1:
         st.markdown("**Sector Risk Treemap** - Size by market cap, color by volatility")
         fig = create_sector_risk_treemap()
         st.plotly_chart(fig, config={"width": 'stretch'}, key='sector_risk_treemap_2')
-    
+
     with tab2:
         st.markdown("**SPLG Holdings Drill-Down** - Explore sectors and individual holdings")
         st.caption("Size = SPLG Weight (%). Click on sectors to drill down into holdings. Hover for detailed KPIs.")
@@ -773,7 +630,7 @@ def render_pro_mode():
         summary_df = get_sector_summary()
         if not summary_df.empty:
             st.dataframe(summary_df, width='stretch', hide_index=True)
-    
+
     with tab3:
         st.markdown("**SPLG Historical Performance**")
         metric = st.session_state.metric
@@ -784,7 +641,7 @@ def render_pro_mode():
         # Pass show_events flag
         fig = create_price_chart(df_column, pd.to_datetime(start_date), pd.to_datetime(end_date), show_events=st.session_state.show_events)
         st.plotly_chart(fig, config={"width": 'stretch'}, key='price_chart_2')
-    
+
     with tab4:
         st.markdown("**Current Model Feature Importance**")
         fig = create_feature_importance_chart(prediction['top_features'])
