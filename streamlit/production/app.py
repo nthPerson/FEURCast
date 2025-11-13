@@ -7,26 +7,85 @@ import plotly.graph_objects as go
 from datetime import datetime
 import sys
 import os
-import pandas as pd
 import io
-from PIL import Image
+import pandas as pd
 
 # Safe rerun helper to support Streamlit versions where experimental_rerun / rerun may be missing
 def safe_rerun():
-    """
-    Attempt to trigger a Streamlit rerun in a way that's compatible across versions.
-    Falls back to st.stop() if no programmatic rerun API is available.
-    """
     try:
-        # Preferred: modern Streamlit
         st.experimental_rerun()
     except Exception:
         try:
-            # Older Streamlit versions
             st.rerun()
         except Exception:
-            # Final fallback: stop the script so the UI can be refreshed by the user
             st.stop()
+
+# --- Glossary page renderer (ensure this is defined before main()) ---
+def render_glossary_page():
+    """
+    Render the Investment Glossary page. Expects investment_glossary.csv at repo root
+    or data/ folder. Shows table, search box, download and Back button.
+    """
+    st.markdown('<p class="main-header">📚 Investment Glossary</p>', unsafe_allow_html=True)
+    st.markdown("Definitions of common finance/investment terms.")
+
+    # Try a couple of likely locations
+    candidates = [
+        os.path.join(os.path.dirname(__file__), '..', '..', 'investment_glossary.csv'),
+        os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'investment_glossary.csv'),
+        os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'glossary.csv'),
+    ]
+    csv_path = next((p for p in candidates if os.path.isfile(p)), None)
+
+    if csv_path is None:
+        st.error("Glossary CSV not found. Expected at one of:\n" + "\n".join(candidates))
+        if st.button("Back to Dashboard", key="back_from_glossary_missing"):
+            st.session_state.page = "home"
+            safe_rerun()
+        return
+
+    try:
+        df = pd.read_csv(csv_path, dtype=str, engine='python')
+        # drop empty trailing columns
+        df = df.loc[:, df.notna().any(axis=0)]
+        # normalize column names
+        cols = [c.strip() for c in df.columns]
+        df.columns = cols
+
+        # If first two columns look like Term / Definition, rename
+        if len(cols) >= 2:
+            if 'term' in cols[0].lower() or 'word' in cols[0].lower():
+                df = df.rename(columns={cols[0]: 'Term', cols[1]: 'Definition'})
+
+        # removed the loaded-count message per request
+
+        query = st.text_input("Search terms or definitions (substring):", value="", key="glossary_search")
+        if query:
+            mask = df.apply(lambda row: row.astype(str).str.contains(query, case=False, na=False).any(), axis=1)
+            display_df = df[mask].reset_index(drop=True)
+            # render table without the index column
+            html = display_df.to_html(index=False, classes="table table-striped", border=0)
+            st.markdown(html, unsafe_allow_html=True)
+        else:
+            # render full table without the index column
+            html = df.to_html(index=False, classes="table table-striped", border=0)
+            st.markdown(html, unsafe_allow_html=True)
+
+        col_dl, col_back = st.columns([1,1])
+        with col_dl:
+            csv_bytes = df.to_csv(index=False).encode('utf-8')
+            st.download_button("Download CSV", csv_bytes, file_name="investment_glossary.csv", mime="text/csv")
+        with col_back:
+            if st.button("Back to Dashboard", key="back_from_glossary"):
+                st.session_state.page = "home"
+                safe_rerun()
+
+    except Exception as e:
+        st.error(f"Failed to load glossary: {e}")
+        if st.button("Back to Dashboard", key="back_from_glossary_err"):
+            st.session_state.page = "home"
+            safe_rerun()
+
 # Import from pred_model package
 from pred_model import get_latest_date_in_dataset
 
@@ -111,28 +170,21 @@ def render_sidebar():
         st.session_state.mode = st.radio(
             "Select Mode:",
             options=['Lite', 'Pro'],
-            key="sidebar_mode_radio",  # ✅ unique key
+            key="sidebar_mode_radio",
             help="Lite: Basic prediction + charts\nPro: Full LLM interface + all tools"
         )
-        # Navigation buttons: Home + Model Performance (styled, centered)
-        # Inject sidebar-specific button styles (colors, sizing, boxed background)
-        st.markdown(
-            """
-        
-            """,
-            unsafe_allow_html=True,
-        )
 
-        # Place the two navigation buttons inside a small boxed area and center them
-        st.markdown('<div class="sidebar-button-box">', unsafe_allow_html=True)
-        col_l, col_c, col_r = st.columns([1, 6, 1])
-        with col_c:
-            if st.button("Home", key="sidebar_home", use_container_width=True):
-                st.session_state.page = "home"
-                safe_rerun()
-            if st.button("Model Performance Metrics", key="open_model_perf", use_container_width=True):
-                st.session_state.page = "performance"
-                safe_rerun()
+        # Stacked navigation buttons: Home, Model Performance, Investment Glossary
+        st.markdown('<div style="display:flex; flex-direction:column; gap:6px;">', unsafe_allow_html=True)
+        if st.button("Home", key="sidebar_home", use_container_width=True):
+            st.session_state.page = "home"
+            safe_rerun()
+        if st.button("Model Performance Metrics", key="open_model_perf", use_container_width=True):
+            st.session_state.page = "performance"
+            safe_rerun()
+        if st.button("Investment Glossary", key="open_glossary", use_container_width=True):
+            st.session_state.page = "glossary"
+            safe_rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
         st.sidebar.header("Chart Filters")
@@ -667,6 +719,11 @@ def main():
         render_performance_page()
         return
 
+    # NEW: route glossary page
+    if st.session_state.page == "glossary":
+        render_glossary_page()
+        return
+
     if st.session_state.mode == 'Lite':
         render_lite_mode()
     else:
@@ -695,7 +752,7 @@ def render_performance_page():
     import inspect
 
     st.markdown('<p class="main-header">📈 Model Performance Metrics</p>', unsafe_allow_html=True)
-    st.markdown("Select a plot tab to view. Prefer dynamically generated figures from pred_model.plots, otherwise show PNGs.")
+    st.markdown("Select a plot tab to view model performance plots.")
 
     items = []  # list of (label, fig_or_path)
 
@@ -750,8 +807,25 @@ def render_performance_page():
             safe_rerun()
         return
 
-    # Create tabs for each plot (like Quick Analytics)
-    tabs = st.tabs([label for label, _ in items])
+    # map internal labels / filenames to friendly display names
+    label_map = {
+        "cumulative_returns": "Cumulative Returns",  # common spelling
+        "error_distribution": "Error Distribution",
+        "feature_importance": "Top Features",
+        "predictions_vs_actuals": "Prediction vs Actual",
+        "residuals": "Residuals",
+        "time_series_predictions": "Time Series Predictions",
+        "training_progress": "GBR Training Progress"
+    }
+
+    # build display labels (preserve original items list for content)
+    display_labels = []
+    for label, _ in items:
+        key = label.lower().replace(" ", "_")
+        display_labels.append(label_map.get(key, label.replace("_", " ").title()))
+
+    # Create tabs for each plot (like Quick Analytics) using the friendly labels
+    tabs = st.tabs(display_labels)
     for tab, (label, content) in zip(tabs, items):
         with tab:
             # Matplotlib-like figure (has savefig)
@@ -760,7 +834,7 @@ def render_performance_page():
                     buf = io.BytesIO()
                     content.savefig(buf, format="png", bbox_inches="tight")
                     buf.seek(0)
-                    st.image(buf, use_column_width=True)
+                    st.image(buf, use_container_width=True)
                     buf.close()
                     continue
             except Exception:
@@ -776,12 +850,12 @@ def render_performance_page():
 
             # PNG file path
             if isinstance(content, str) and os.path.isfile(content):
-                st.image(content, use_column_width=True)
+                st.image(content, use_container_width=True)
                 continue
 
             # bytes / raw image
             if isinstance(content, (bytes, bytearray)):
-                st.image(content, use_column_width=True)
+                st.image(content, use_container_width=True)
                 continue
 
             st.warning(f"Could not render plot: {label}")
@@ -805,7 +879,7 @@ def render_performance_page_dynamic():
             buf = io.BytesIO()
             fig.savefig(buf, format='png', bbox_inches='tight')
             buf.seek(0)
-            st.image(buf, use_column_width=True)
+            st.image(buf, use_container_width=True)
             buf.close()
     except Exception as e:
         st.error(f"Could not generate plots dynamically: {e}")
