@@ -110,6 +110,7 @@ from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(__file__), '../..', '.env'))
 MARKETSENTIMENT_API_KEY = os.getenv('MARKETSENTIMENT_API_KEY')
 FRED_KEY= os.getenv('FRED_KEY')
+# Note: bullish/bearish sentiment variables removed; UI shows headline-based summary only
 # ---------- STREAMLIT CONFIGURATION ----------
 
 # Page configuration
@@ -291,7 +292,7 @@ def render_feature_importance(features):
 def render_lite_mode():
     
     import requests
-    # 🗞️ News Channel (TOP SECTION)
+    # News Channel (TOP SECTION)
     url = f"https://finnhub.io/api/v1/news?category=general&token={MARKETSENTIMENT_API_KEY}"
 
     try:
@@ -301,7 +302,7 @@ def render_lite_mode():
         st.error(f"Error fetching news: {e}")
         articles = []
 
-    st.markdown("##### 🗞️ Latest Market Headlines", unsafe_allow_html=True)
+    st.markdown("##### Latest Market Headlines", unsafe_allow_html=True)
 
     if not articles or not isinstance(articles, list):
         st.warning("No recent S&P 500 news found.")
@@ -339,7 +340,7 @@ def render_lite_mode():
         )
         
     # =============================
-    # 🌍 Macro & Sentiment Dashboard (FRED + Sentiment Combined)
+    # Macro & Sentiment Dashboard (FRED + Sentiment Combined)
     # =============================
     import requests
     FRED_KEY = "167c610d0808df0df6fc03d8a7c9f611"  # 🔑 Replace with your own
@@ -389,38 +390,42 @@ def render_lite_mode():
 
 
     # --- Display Combined Indicators ---
-    st.markdown("##### 🌍 Macro & Sentiment Dashboard")
+    st.markdown("##### Macro & Sentiment Dashboard")
 
-    col1, col2, col3 = st.columns(3)
+    # Use equal-width columns with a slightly larger gap and full-width panels
+    col1, col2 = st.columns([1, 1], gap="large")
+
+    panel_style = (
+        "padding:12px; border-radius:10px; "
+        "background:linear-gradient(180deg,#f8f9fa,#eef2f5); "
+        "border:1px solid rgba(0,0,0,0.06); box-shadow:0 2px 8px rgba(0,0,0,0.06); "
+        "width:100%; box-sizing:border-box;"
+    )
 
     with col1:
-        st.metric(
-            "💼 Unemployment Rate",
-            f"{unemployment_rate:.1f}%" if unemployment_rate is not None else "N/A",
-            un_status
+        # Show unemployment with status badge using computed color (stretches full column width)
+        un_display = f"{unemployment_rate:.1f}%" if unemployment_rate is not None else "N/A"
+        st.markdown(
+            f"<div style='{panel_style}'>"
+            f"<div style='font-size:1.0rem; font-weight:600;'>Unemployment Rate</div>"
+            f"<div style='font-size:1.6rem; margin-top:6px;'>{un_display}</div>"
+            f"<div style='margin-top:8px; color:{un_color}; font-weight:700;'>{un_status}</div>"
+            f"</div>",
+            unsafe_allow_html=True,
         )
 
     with col2:
-        st.metric(
-            "🏛️ Public Debt (% of GDP)",
-            f"{public_debt_pct:.1f}%" if public_debt_pct is not None else "N/A",
-            debt_status
+        # Show public debt with status badge using computed color (stretches full column width)
+        debt_display = f"{public_debt_pct:.1f}%" if public_debt_pct is not None else "N/A"
+        st.markdown(
+            f"<div style='{panel_style}'>"
+            f"<div style='font-size:1.0rem; font-weight:600;'>Public Debt (% of GDP)</div>"
+            f"<div style='font-size:1.6rem; margin-top:6px;'>{debt_display}</div>"
+            f"<div style='margin-top:8px; color:{debt_color}; font-weight:700;'>{debt_status}</div>"
+            f"</div>",
+            unsafe_allow_html=True,
         )
 
-    with col3:
-        if "bullish" in locals() and bullish is not None:
-            sentiment_label = (
-                "Bullish" if bullish > 0.55 else
-                "Bearish" if bullish < 0.45 else
-                "Neutral"
-            )
-            st.metric(
-                "📊 Market Sentiment",
-                sentiment_label,
-                f"{bullish*100:.1f}%" if bullish else "N/A"
-            )
-        else:
-            pass ## if no data is shown on sentiments then we are passing this section KPI or use if you want to display st.metric("📊 Market Sentiment", " ", " ")
 
     # --- Optional Styling ---
     st.markdown("""
@@ -488,6 +493,149 @@ def render_lite_mode():
 
 # ---------- PRO MODE ----------
 def render_pro_mode():
+    import requests
+    # News Channel (TOP SECTION)
+    url = f"https://finnhub.io/api/v1/news?category=general&token={MARKETSENTIMENT_API_KEY}"
+
+    try:
+        response = requests.get(url, timeout=5)
+        articles = response.json()
+    except Exception as e:
+        st.error(f"Error fetching news: {e}")
+        articles = []
+
+    st.markdown("##### Latest Market Headlines", unsafe_allow_html=True)
+
+    if not articles or not isinstance(articles, list):
+        st.warning("No recent S&P 500 news found.")
+    else:
+        articles = sorted(articles, key=lambda x: x.get("datetime", 0), reverse=True)
+        display_articles = articles[:20]
+
+        headlines_html = ""
+        for a in display_articles:
+            headline = a.get("headline", "Untitled")
+            link = a.get("url", "#")
+            sentiment = "neutral"
+            if any(w in headline.lower() for w in ["up", "gain", "growth", "rally", "record"]):
+                sentiment = "positive"
+            elif any(w in headline.lower() for w in ["down", "loss", "drop", "fall", "decline"]):
+                sentiment = "negative"
+
+            color = (
+                "#00ff99" if sentiment == "positive"
+                else "#ff4d4d" if sentiment == "negative"
+                else "white"
+            )
+            headlines_html += f'📈 <a href="{link}" target="_blank" style="color:{color}; text-decoration:none; margin-right:50px;">{headline}</a>'
+
+        st.markdown(
+            f"""
+            <div style="background-color:#001f3f; padding:5px; border-radius:8px; margin-bottom:5px;">
+                <marquee behavior="scroll" direction="left" scrollamount="5"
+                         style="font-size:20px; font-weight:500;">
+                    {headlines_html}
+                </marquee>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        
+    # =============================
+    # Macro & Sentiment Dashboard (FRED + Sentiment Combined)
+    # =============================
+    import requests
+    FRED_KEY = "167c610d0808df0df6fc03d8a7c9f611"  # 🔑 Replace with your own
+    base_url = "https://api.stlouisfed.org/fred/series/observations"
+
+    # --- Fetch Unemployment Rate (UNRATE) ---
+    params_un = {
+        "series_id": "UNRATE",
+        "api_key": FRED_KEY,
+        "file_type": "json",
+        "sort_order": "desc",
+        "limit": 1
+    }
+    try:
+        resp_un = requests.get(base_url, params=params_un, timeout=5)
+        data_un = resp_un.json().get("observations", [])
+        unemployment_rate = float(data_un[0].get("value", 0)) if data_un else None
+    except Exception:
+        unemployment_rate = None
+
+    # --- Fetch Public Debt to GDP Ratio (GFDEGDQ188S) ---
+    params_debt = {
+        "series_id": "GFDEGDQ188S",
+        "api_key": FRED_KEY,
+        "file_type": "json",
+        "sort_order": "desc",
+        "limit": 1
+    }
+    try:
+        resp_debt = requests.get(base_url, params=params_debt, timeout=5)
+        data_debt = resp_debt.json().get("observations", [])
+        public_debt_pct = float(data_debt[0].get("value", 0)) if data_debt else None
+    except Exception:
+        public_debt_pct = None
+
+    # --- Threshold Logic ---
+    def indicator_status(value, good_max):
+        if value is None:
+            return "N/A", "grey"
+        if value <= good_max:
+            return "Acceptable", "green"
+        else:
+            return "Bad", "red"
+
+    un_status, un_color = indicator_status(unemployment_rate, 6.0) # Unemployment: 0 to 6% acceptable (the closer to 0 the better) 6.1% and above BAD
+    debt_status, debt_color = indicator_status(public_debt_pct, 70.0) #Public Debt: 0 to 70% acceptable (the closer to 0 the better) 71% and above BAD
+
+
+    # --- Display Combined Indicators ---
+    st.markdown("##### Macro & Sentiment Dashboard")
+
+    # Use equal-width columns with a slightly larger gap and full-width panels
+    col1, col2 = st.columns([1, 1], gap="large")
+
+    panel_style = (
+        "padding:12px; border-radius:10px; "
+        "background:linear-gradient(180deg,#f8f9fa,#eef2f5); "
+        "border:1px solid rgba(0,0,0,0.06); box-shadow:0 2px 8px rgba(0,0,0,0.06); "
+        "width:100%; box-sizing:border-box;"
+    )
+
+    with col1:
+        # Show unemployment with status badge using computed color (stretches full column width)
+        un_display = f"{unemployment_rate:.1f}%" if unemployment_rate is not None else "N/A"
+        st.markdown(
+            f"<div style='{panel_style}'>"
+            f"<div style='font-size:1.0rem; font-weight:600;'>Unemployment Rate</div>"
+            f"<div style='font-size:1.6rem; margin-top:6px;'>{un_display}</div>"
+            f"<div style='margin-top:8px; color:{un_color}; font-weight:700;'>{un_status}</div>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+    with col2:
+        # Show public debt with status badge using computed color (stretches full column width)
+        debt_display = f"{public_debt_pct:.1f}%" if public_debt_pct is not None else "N/A"
+        st.markdown(
+            f"<div style='{panel_style}'>"
+            f"<div style='font-size:1.0rem; font-weight:600;'>Public Debt (% of GDP)</div>"
+            f"<div style='font-size:1.6rem; margin-top:6px;'>{debt_display}</div>"
+            f"<div style='margin-top:8px; color:{debt_color}; font-weight:700;'>{debt_status}</div>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+
+    # --- Optional Styling ---
+    st.markdown("""
+    <style>[data-testid="stMetricValue"] {font-size: 1.4rem !important;}
+    [data-testid="stMetricLabel"] {color: #1c1c1c;}
+    </style>
+    """, unsafe_allow_html=True)
+    
     """Render Pro mode interface with LLM query capabilities"""
     st.markdown('<p class="main-header">🚀 FUREcast Pro Analytics</p>', unsafe_allow_html=True)
     st.markdown('<p class="sub-header">AI-Powered Investment Insights & Natural Language Interface</p>', unsafe_allow_html=True)
