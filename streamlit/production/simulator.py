@@ -442,6 +442,9 @@ def create_sector_risk_treemap() -> go.Figure:
         {'sector': k, 'size': v['size'], 'volatility': v['volatility']}
         for k, v in sectors.items()
     ])
+
+    # Add volatility in percent so we can format it easily in hovertemplate
+    df['volatility_pct'] = df['volatility'] * 100
     
     fig = px.treemap(
         df,
@@ -449,13 +452,21 @@ def create_sector_risk_treemap() -> go.Figure:
         values='size',
         color='volatility',
         color_continuous_scale='RdYlGn_r',
-        title='SPLG Sector Risk Map (by Volatility)'
+        title='SPLG Sector Risk Map (by Volatility)',
+        custom_data=['volatility_pct']  # make volatility percent available to the trace
     )
-    
+
     fig.update_traces(
-        textinfo='label+value',
+        # display label and formatted value inside tiles (e.g. "Technology\n28.5%")
         textposition='middle center',
-        textfont=dict(size=14)
+        textfont=dict(size=14),
+        texttemplate='%{label}<br>%{value:.1f}%', 
+        # hover shows sector, size with percent sign, and volatility as percent
+        hovertemplate=(
+            'sector=%{label}<br>'
+            'size=%{value:.1f}%<br>'
+            'volatility=%{customdata[0]:.1f}%<extra></extra>'
+        )
     )
     
     fig.update_layout(
