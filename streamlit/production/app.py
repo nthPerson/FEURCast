@@ -656,7 +656,7 @@ def render_pro_mode():
     
     # Additional tools section - MOVED OUTSIDE the conditional logic
     st.markdown("---")
-    st.markdown("### 📊 Quick Analytics")
+    st.markdown("### 📊 Advanced Sector Analytics")
     
     tab1, tab2, tab3, tab4 = st.tabs(["Sector Risk", "Holdings Detail", "Price Trends", "Feature Analysis"])
 
