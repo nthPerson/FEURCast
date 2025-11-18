@@ -28,8 +28,7 @@ from llm_interface import (
     explain_prediction
 )
 
-# example edit
-
+# Example edit!
 
 # Page configuration
 st.set_page_config(
