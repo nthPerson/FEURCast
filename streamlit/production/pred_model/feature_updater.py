@@ -17,7 +17,8 @@ import sys
 MODULE_DIR = Path(__file__).parent
 DATA_PATH = MODULE_DIR.parent.parent.parent / "data" / "rich_features_SPLG_history_full.csv"
 RAW_DATA_PATH = MODULE_DIR.parent.parent.parent / "data" / "SPLG_history_full.csv"
-FEATURE_ENGINEERING_PATH = MODULE_DIR.parent.parent.parent / "wrangling" / "pred_model_feature_engineering"
+FEATURE_ENGINEERING_PATH = MODULE_DIR / "data_out" / "rich_features_SPLG_history_full.csv"
+# FEATURE_ENGINEERING_PATH = MODULE_DIR.parent.parent.parent / "wrangling" / "pred_model_feature_engineering"
 
 # Setup logging
 def setup_logger(name: str) -> logging.Logger:
@@ -71,7 +72,8 @@ def rebuild_features_from_scratch() -> bool:
         build_features([])  # Pass empty list as argv since paths are hardcoded in the script
         
         # Copy the output to the main data directory
-        source = FEATURE_ENGINEERING_PATH / "data_out" / "rich_features_SPLG_history_full.csv"
+        source = FEATURE_ENGINEERING_PATH
+        # source = FEATURE_ENGINEERING_PATH / "data_out" / "rich_features_SPLG_history_full.csv"
         
         if not source.exists():
             logger.error(f"Feature file not found at {source}")

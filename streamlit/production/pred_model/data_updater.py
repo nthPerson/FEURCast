@@ -291,6 +291,7 @@ if __name__ == "__main__":
     has_updates, new_data = check_for_updates()
     
     if has_updates:
+        # TODO: add call to rebuild_features_from_scratch here to rebuild engineered dataset
         print(f"\n✓ Successfully updated dataset with {len(new_data)} new records")
         print(f"  Latest date: {new_data['date'].max().date()}")
     else:

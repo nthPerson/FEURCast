@@ -4,19 +4,6 @@ build_splg_features.py
 
 Engineer a rich feature set for SPLG daily OHLCV data for use with tree-based
 models (e.g., GradientBoostingRegressor). No external TA libraries required.
-
-Input CSV must contain (names can vary by case/underscore/space; script normalizes):
-    Date, Company Name, Ticker, Current Price|Current_Price, Open, Close, High, Low, Volume
-
-Outputs a CSV with:
-  - Original columns (normalized snake_case)
-  - Dozens of engineered features across trend, momentum, volatility, volume, lags, calendar
-  - Two target columns:
-        target_close_t1  = next-day Close (regression)
-        target_return_t1 = next-day % return (regression/classification cutoff)
-
-Usage:
-    python build_splg_features.py --input splg_raw.csv --output splg_features_full.csv
 """
 
 import argparse
@@ -25,6 +12,35 @@ import numpy as np
 import pandas as pd
 from typing import List, Tuple
 import os
+from pathlib import Path
+import logging
+from datetime import datetime
+
+# ----------------------------
+# Setup Logging
+# ----------------------------
+def setup_logger(name: str) -> logging.Logger:
+    """Configure logger for feature engineering"""
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.INFO)
+    
+    # Avoid duplicate handlers
+    if logger.handlers:
+        return logger
+    
+    # Console handler
+    ch = logging.StreamHandler(sys.stdout)
+    ch.setLevel(logging.INFO)
+    
+    # Formatter
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    ch.setFormatter(formatter)
+    
+    logger.addHandler(ch)
+    
+    return logger
+
+logger = setup_logger(__name__)
 
 # ----------------------------
 # Utilities
@@ -56,17 +72,13 @@ def ema(series: pd.Series, span: int) -> pd.Series:
     return series.ewm(span=span, adjust=False).mean()
 
 def rsi(close: pd.Series, window: int = 14) -> pd.Series:
-    # Classic Wilder RSI implementation (simple rolling averages)
     delta = close.diff()
     gain = delta.clip(lower=0.0)
     loss = -delta.clip(upper=0.0)
     avg_gain = gain.rolling(window).mean()
     avg_loss = loss.rolling(window).mean()
-    # Avoid division by zero: if avg_loss is 0, RSI should be 100
-    # Add small epsilon to denominator to prevent inf
     rs = avg_gain / (avg_loss + 1e-10)
     rsi_values = 100 - (100 / (1 + rs))
-    # Cap RSI between 0 and 100
     return rsi_values.clip(0, 100)
 
 def true_range(high: pd.Series, low: pd.Series, prev_close: pd.Series) -> pd.Series:
@@ -76,19 +88,15 @@ def true_range(high: pd.Series, low: pd.Series, prev_close: pd.Series) -> pd.Ser
     return pd.concat([a, b, c], axis=1).max(axis=1)
 
 def obv(close: pd.Series, volume: pd.Series) -> pd.Series:
-    # On-Balance Volume
     sign = np.sign(close.diff()).fillna(0.0)
     return (sign * volume).fillna(0.0).cumsum()
 
 def volume_price_trend(close: pd.Series, volume: pd.Series) -> pd.Series:
-    # VPT = cumulative sum of Volume * pct_change(Close)
     return (volume * close.pct_change(fill_method=None)).fillna(0.0).cumsum()
 
 def add_calendar_features(df: pd.DataFrame, date_col: str = "date") -> pd.DataFrame:
     df = df.copy()
-    # The date column should already be a datetime type (naive or aware)
     if not np.issubdtype(df[date_col].dtype, np.datetime64):
-        # If not datetime, try to convert it
         df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
     
     dt = df[date_col]
@@ -101,60 +109,64 @@ def add_calendar_features(df: pd.DataFrame, date_col: str = "date") -> pd.DataFr
     return df
 
 def rolling_slope(x: pd.Series, window: int) -> pd.Series:
-    """
-    Simple rolling slope (% change) proxy for trend steepness:
-    slope_t = (MA_t - MA_{t-1}) / MA_{t-1}
-    """
     ma = x.rolling(window).mean()
     slope = (ma - ma.shift(1)) / ma.shift(1)
-    # Replace inf and NaN with 0 (no change)
     return slope.replace([np.inf, -np.inf], 0).fillna(0)
 
 # ----------------------------
 # Core feature engineering
 # ----------------------------
 def engineer_features(df_raw: pd.DataFrame) -> pd.DataFrame:
+    """
+    Engineer features from raw SPLG data.
+    
+    IMPORTANT: This function preserves ALL rows and does NOT drop NaN values.
+    NaN handling is deferred to the training script (train_gbr_model.py).
+    """
+    logger.info("="*70)
+    logger.info("Starting Feature Engineering")
+    logger.info("="*70)
+    
     df = normalize_cols(df_raw)
-
-    # Map possible aliases
-    col_map = {
-        "date": "date",
-        "company_name": "company_name",
-        "ticker": "ticker",
-        "current_price": "current_price",  # if missing, we may alias to 'close'
-        "open": "open",
-        "close": "close",
-        "high": "high",
-        "low": "low",
-        "volume": "volume",
-    }
-
-    # Accept both 'current_price' or 'current_price' derived from 'current price'
-    # After normalization, 'current price' -> 'current_price' already.
+    
+    logger.info(f"Input data: {len(df)} rows, {len(df.columns)} columns")
+    logger.info(f"Date range: {df['date'].min()} to {df['date'].max()}")
 
     # Ensure required market columns exist
     required_any_current = ["date", "open", "close", "high", "low", "volume"]
     require_columns(df, required_any_current)
 
-    # If current_price is missing or empty, create it as close (some vendors do this)
+    # If current_price is missing or empty, create it as close
     if "current_price" not in df.columns:
         df["current_price"] = df["close"]
 
     # Parse date, sort, drop duplicates
-    # The input dates have timezone info (e.g., '2005-11-15 00:00:00-05:00')
-    # Parse them, convert to a consistent timezone, then make timezone-naive
+    logger.info("Parsing and sorting dates...")
     df["date"] = pd.to_datetime(df["date"], errors="coerce", utc=True)
-    # Convert from UTC to America/New_York timezone, then remove timezone info
     df["date"] = df["date"].dt.tz_convert("America/New_York").dt.tz_localize(None)
-    df = df.dropna(subset=["date"]).sort_values("date").drop_duplicates(subset=["date"]).reset_index(drop=True)
+    
+    # Drop rows with invalid dates
+    initial_count = len(df)
+    df = df.dropna(subset=["date"])
+    if len(df) < initial_count:
+        logger.warning(f"Dropped {initial_count - len(df)} rows with invalid dates")
+    
+    df = df.sort_values("date").drop_duplicates(subset=["date"]).reset_index(drop=True)
+    logger.info(f"After date cleaning: {len(df)} rows")
 
     # Coerce numerics
     num_cols = ["open", "close", "high", "low", "volume", "current_price"]
     df = coerce_numeric(df, num_cols)
 
-    # Basic sanity: drop rows without key prices
+    # Basic sanity: drop rows without key prices (these are truly unusable)
+    initial_count = len(df)
     df = df.dropna(subset=["open", "close", "high", "low", "volume"])
+    if len(df) < initial_count:
+        logger.warning(f"Dropped {initial_count - len(df)} rows missing OHLCV data")
+    logger.info(f"After OHLCV validation: {len(df)} rows")
 
+    logger.info("Engineering features...")
+    
     # --- Price relationships ---
     df["high_low_spread"] = df["high"] - df["low"]
     df["high_low_pct"]    = (df["high"] - df["low"]) / df["close"]
@@ -166,7 +178,6 @@ def engineer_features(df_raw: pd.DataFrame) -> pd.DataFrame:
 
     # --- Returns ---
     df["return_1d"]   = df["close"].pct_change()
-    # Use natural log for stationarity; avoid divide-by-zero by shift safely
     df["log_return"]  = np.log(df["close"] / df["close"].shift(1))
 
     for w in [5, 10, 20]:
@@ -180,11 +191,10 @@ def engineer_features(df_raw: pd.DataFrame) -> pd.DataFrame:
     for w in ma_windows:
         df[f"ma_{w}"] = df["close"].rolling(w).mean()
         df[f"ema_{w}"] = ema(df["close"], w)
-        # Safe division: replace inf with 1.0 (price equals MA)
         df[f"price_ma_{w}_ratio"] = (df["close"] / df[f"ma_{w}"]).replace([np.inf, -np.inf], 1.0).fillna(1.0)
         df[f"ma_{w}_slope"] = rolling_slope(df["close"], w)
 
-    # Golden/death-cross style binary signals (interpretable to stakeholders)
+    # Golden/death-cross style binary signals
     df["ma_cross_10_over_50"]  = (df["ma_10"] > df["ma_50"]).astype(int)
     df["ma_cross_20_over_50"]  = (df["ma_20"] > df["ma_50"]).astype(int)
     df["ma_cross_50_over_200"] = (df["ma_50"] > df["ma_200"]).astype(int)
@@ -217,16 +227,13 @@ def engineer_features(df_raw: pd.DataFrame) -> pd.DataFrame:
     std20 = df["close"].rolling(20).std()
     df["bb_upper_20"] = mid + 2 * std20
     df["bb_lower_20"] = mid - 2 * std20
-    # Safe division: if bands are equal (std=0), set to 0.5 (middle)
     band_width = df["bb_upper_20"] - df["bb_lower_20"]
     df["bb_pct_20"] = ((df["close"] - df["bb_lower_20"]) / (band_width + 1e-10)).clip(0, 1)
 
     # --- Volume features ---
-    # Use pct_change with fillna to handle edge cases, replace inf with 0
     df["vol_change"]  = df["volume"].pct_change().replace([np.inf, -np.inf], 0).fillna(0)
     df["vol_ma_5"]    = df["volume"].rolling(5).mean()
     df["vol_ma_20"]   = df["volume"].rolling(20).mean()
-    # Safe division: replace inf and NaN with 1.0 (neutral ratio)
     df["vol_ratio_5_20"] = (df["vol_ma_5"] / df["vol_ma_20"]).replace([np.inf, -np.inf], 1.0).fillna(1.0)
 
     df["obv"] = obv(df["close"], df["volume"])
@@ -243,7 +250,6 @@ def engineer_features(df_raw: pd.DataFrame) -> pd.DataFrame:
         df[f"rolling_mean_close_{w}"] = df["close"].rolling(w).mean()
         df[f"rolling_max_{w}"] = df["close"].rolling(w).max()
         df[f"rolling_min_{w}"] = df["close"].rolling(w).min()
-        # rolling skew/kurtosis can be noisy; still useful for trees
         df[f"rolling_skew_{w}"] = df["close"].rolling(w).skew()
         df[f"rolling_kurt_{w}"] = df["close"].rolling(w).kurt()
 
@@ -251,15 +257,36 @@ def engineer_features(df_raw: pd.DataFrame) -> pd.DataFrame:
     df = add_calendar_features(df, "date")
 
     # --- Targets (shifted forward; **do not** use these as inputs!) ---
+    logger.info("Creating target variables...")
     df["target_close_t1"]  = df["close"].shift(-1)
     df["target_return_t1"] = (df["close"].shift(-1) / df["close"]) - 1
 
     # Drop columns that are entirely NaN (e.g., 'beta' if never populated)
     df = df.dropna(axis=1, how='all')
     
-    # Drop rows with NaNs introduced by rolling windows and the forward target
-    # This keeps rows where all columns have valid data
-    df = df.dropna().reset_index(drop=True)
+    # CRITICAL: DO NOT drop rows with NaN here!
+    # NaN handling is deferred to training script (train_gbr_model.py)
+    # This preserves all historical data including:
+    # - Early rows with NaN in rolling window features (first ~200 rows)
+    # - Last row with NaN in targets (from forward shift)
+    
+    logger.info("="*70)
+    logger.info("Feature Engineering Complete")
+    logger.info("="*70)
+    logger.info(f"Output data: {len(df)} rows, {len(df.columns)} columns")
+    logger.info(f"Date range: {df['date'].min()} to {df['date'].max()}")
+    
+    # Diagnostic: Count NaN values
+    feature_cols = [col for col in df.columns if not col.startswith('target_') and col not in ['date', 'company_name', 'ticker']]
+    feature_nans = df[feature_cols].isna().sum().sum()
+    target_nans = df[['target_close_t1', 'target_return_t1']].isna().sum().sum()
+    
+    logger.info(f"NaN counts: Features={feature_nans}, Targets={target_nans}")
+    logger.info("(NaN values will be handled during model training)")
+    logger.info("="*70)
+    
+    # Reset index
+    df = df.reset_index(drop=True)
 
     return df
 
@@ -268,47 +295,53 @@ def engineer_features(df_raw: pd.DataFrame) -> pd.DataFrame:
 # ----------------------------
 def parse_args(argv: List[str]) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Engineer SPLG features for GBR.")
-    p.add_argument("--input", "-i", required=True, help="Path to raw SPLG CSV.")
-    p.add_argument("--output", "-o", required=True, help="Path to write features CSV.")
+    p.add_argument("--input", "-i", required=False, help="Path to raw SPLG CSV.")
+    p.add_argument("--output", "-o", required=False, help="Path to write features CSV.")
     p.add_argument("--show-info", action="store_true", help="Print dataframe info summary.")
     return p.parse_args(argv)
 
 def main(argv: List[str]) -> int:
-    # args = parse_args(argv)  # using hard-coded path instead
-
-    #### Input and output paths ####
-    # SPLG_DATA_IN = "/home/robert/FEURCast/data/SPLG_history_full.csv"
-    SPLG_DATA_IN = "../../../data/SPLG_history_full.csv"
-    # SPLG_DATA_IN = "../../data/SPLG_history_full.csv"
-    DATA_OUT_DIR = "../../../data"  # Points to /data directory
-    # DATA_OUT_DIR = "data_out"
+    # Parse args
+    args = parse_args(argv)
+    
+    # Resolve paths relative to this script's location
+    SCRIPT_DIR = Path(__file__).parent
+    DATA_DIR = SCRIPT_DIR.parent.parent.parent / "data"
+    SPLG_DATA_IN = DATA_DIR / "SPLG_history_full.csv"
+    
+    # Output to pred_model/data_out directory
+    DATA_OUT_DIR = SCRIPT_DIR / "data_out"
     os.makedirs(DATA_OUT_DIR, exist_ok=True)
-    OUT_CSV_PATH = os.path.join(DATA_OUT_DIR, "rich_features_SPLG_history_full.csv")
-
+    OUT_CSV_PATH = DATA_OUT_DIR / "rich_features_SPLG_history_full.csv"
+    
+    # Use command line args if provided, otherwise use defaults
+    input_path = args.input if args.input else SPLG_DATA_IN
+    output_path = args.output if args.output else OUT_CSV_PATH
+    
+    logger.info(f"Reading raw data from: {input_path}")
+    
     # Read
-    df_raw = pd.read_csv(SPLG_DATA_IN)
-    print(f'##### Raw sample: {df_raw.head()}')
-    # df_raw = pd.read_csv(args.input)
+    df_raw = pd.read_csv(input_path)
+    logger.info(f"Raw data sample (first 5 rows):")
+    logger.info(f"\n{df_raw.head()}")
 
     # Engineer
     df_feat = engineer_features(df_raw)
 
-    # print info
-    print("Feature rows:", len(df_feat))
-    print("Feature cols:", len(df_feat.columns))
-    print("Columns sample:", list(df_feat.columns)[:20], "...")
-    print(df_feat.tail(3))
-    # if args.show_info:
-    #     print("Feature rows:", len(df_feat))
-    #     print("Feature cols:", len(df_feat.columns))
-    #     print("Columns sample:", list(df_feat.columns)[:20], "...")
-    #     print(df_feat.tail(3))
+    # Print info
+    if args.show_info:
+        logger.info("\nFeature Engineering Summary:")
+        logger.info(f"  Rows: {len(df_feat)}")
+        logger.info(f"  Columns: {len(df_feat.columns)}")
+        logger.info(f"  Sample columns: {list(df_feat.columns)[:20]}...")
+        logger.info(f"\nLast 3 rows:")
+        logger.info(f"\n{df_feat.tail(3)}")
 
     # Write
-    df_feat.to_csv(OUT_CSV_PATH, index=False)
-    # df_feat.to_csv(args.output, index=False)
-    print(f"[OK] Wrote engineered features to: {OUT_CSV_PATH}")
-    # print(f"[OK] Wrote engineered features to: {args.output}")
+    df_feat.to_csv(output_path, index=False)
+    logger.info(f"✓ Wrote engineered features to: {output_path}")
+    logger.info(f"✓ Final output: {len(df_feat)} rows × {len(df_feat.columns)} columns")
+    
     return 0
 
 if __name__ == "__main__":

@@ -1,0 +1,10 @@
+2025-11-10 00:01:40,092 - INFO - ======================================================================
+2025-11-10 00:01:40,092 - INFO - Feature Engineering - Full Rebuild
+2025-11-10 00:01:40,092 - INFO - ======================================================================
+2025-11-10 00:01:40,094 - INFO - Running feature engineering pipeline...
+2025-11-10 00:01:40,501 - INFO - ✓ Generated features: 5026 rows, 116 columns
+2025-11-10 00:01:40,777 - INFO - ✓ Saved features to /home/robert/FEURCast/data/rich_features_SPLG_history_full.csv
+2025-11-10 00:01:40,783 - INFO - ✓ No infinite values detected
+2025-11-10 00:01:40,784 - INFO - ======================================================================
+2025-11-10 00:01:40,784 - INFO - ✓ Feature engineering complete
+2025-11-10 00:01:40,784 - INFO - ======================================================================
