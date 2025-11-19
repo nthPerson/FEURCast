@@ -1,7 +1,7 @@
 {
   "model_type": "GradientBoostingRegressor",
-  "version": "20251119_011127",
-  "training_date": "2025-11-19T01:11:28.178400",
+  "version": "20251119_065833",
+  "training_date": "2025-11-19T06:58:33.390483",
   "n_features": 110,
   "hyperparameters": {
     "alpha": 0.9,
