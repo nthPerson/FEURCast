@@ -1,6 +1,9 @@
 ---
 name: Daily Model Retrain
 
+permissions:
+  contents: write
+
 on:
   schedule:
     # Run daily at 6:00 PM ET (23:00 UTC, adjust for DST)
@@ -10,7 +13,6 @@ on:
 jobs:
   update-and-retrain:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
