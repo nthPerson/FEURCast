@@ -180,7 +180,6 @@ def initialize_session_state():
 def render_sidebar():
     with st.sidebar:
         st.image("https://upload.wikimedia.org/wikipedia/commons/c/c8/FURECast_SPLG.png", width='stretch')
-        st.markdown("### 🎓 Demo Mode")
         st.session_state.mode = st.radio(
             "Select Mode:",
             options=['Lite', 'Pro'],
