@@ -15,6 +15,7 @@ ai_context
 # But ignore temporary logs (GitHub Actions)
 streamlit/production/pred_model/logs/*_*.log
 streamlit/production/pred_model/logs/*_*.txt
+streamlit/production/pred_model/logs/data_update_20251109.log
 
 # Allow data files (GitHub Actions)
 !data/SPLG_history_full.csv

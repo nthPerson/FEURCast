@@ -7,7 +7,84 @@ import plotly.graph_objects as go
 from datetime import datetime
 import sys
 import os
+import io
 import pandas as pd
+
+# Safe rerun helper to support Streamlit versions where experimental_rerun / rerun may be missing
+def safe_rerun():
+    try:
+        st.experimental_rerun()
+    except Exception:
+        try:
+            st.rerun()
+        except Exception:
+            st.stop()
+
+# --- Glossary page renderer (ensure this is defined before main()) ---
+def render_glossary_page():
+    """
+    Render the Investment Glossary page. Expects investment_glossary.csv at repo root
+    or data/ folder. Shows table, search box, download and Back button.
+    """
+    st.markdown('<p class="main-header">📚 Investment Glossary</p>', unsafe_allow_html=True)
+    st.markdown("Definitions of common finance/investment terms.")
+
+    # Try a couple of likely locations
+    candidates = [
+        os.path.join(os.path.dirname(__file__), '..', '..', 'investment_glossary.csv'),
+        os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'investment_glossary.csv'),
+        os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'glossary.csv'),
+    ]
+    csv_path = next((p for p in candidates if os.path.isfile(p)), None)
+
+    if csv_path is None:
+        st.error("Glossary CSV not found. Expected at one of:\n" + "\n".join(candidates))
+        if st.button("Back to Dashboard", key="back_from_glossary_missing"):
+            st.session_state.page = "home"
+            safe_rerun()
+        return
+
+    try:
+        df = pd.read_csv(csv_path, dtype=str, engine='python')
+        # drop empty trailing columns
+        df = df.loc[:, df.notna().any(axis=0)]
+        # normalize column names
+        cols = [c.strip() for c in df.columns]
+        df.columns = cols
+
+        # If first two columns look like Term / Definition, rename
+        if len(cols) >= 2:
+            if 'term' in cols[0].lower() or 'word' in cols[0].lower():
+                df = df.rename(columns={cols[0]: 'Term', cols[1]: 'Definition'})
+
+        # removed the loaded-count message per request
+
+        query = st.text_input("Search terms or definitions (substring):", value="", key="glossary_search")
+        if query:
+            mask = df.apply(lambda row: row.astype(str).str.contains(query, case=False, na=False).any(), axis=1)
+            display_df = df[mask].reset_index(drop=True)
+            # render table without the index column
+            html = display_df.to_html(index=False, classes="table table-striped", border=0)
+            st.markdown(html, unsafe_allow_html=True)
+        else:
+            # render full table without the index column
+            html = df.to_html(index=False, classes="table table-striped", border=0)
+            st.markdown(html, unsafe_allow_html=True)
+
+        col_dl, col_back = st.columns([1,1])
+        with col_dl:
+            csv_bytes = df.to_csv(index=False).encode('utf-8')
+            st.download_button("Download CSV", csv_bytes, file_name="investment_glossary.csv", mime="text/csv")
+        with col_back:
+            if st.button("Back to Dashboard", key="back_from_glossary"):
+                st.session_state.page = "home"
+                safe_rerun()
+
+    except Exception as e:
+        st.error(f"Failed to load glossary: {e}")
+        if st.button("Back to Dashboard", key="back_from_glossary_err"):
+            st.session_state.page = "home"
+            safe_rerun()
 
 # Import from pred_model package
 from pred_model import get_latest_date_in_dataset
@@ -28,7 +105,13 @@ from llm_interface import (
     explain_prediction
 )
 
-# Example edit!
+# Load environment variables
+from dotenv import load_dotenv
+load_dotenv(os.path.join(os.path.dirname(__file__), '../..', '.env'))
+MARKETSENTIMENT_API_KEY = os.getenv('MARKETSENTIMENT_API_KEY')
+FRED_KEY= os.getenv('FRED_KEY')
+# Note: bullish/bearish sentiment variables removed; UI shows headline-based summary only
+# ---------- STREAMLIT CONFIGURATION ----------
 
 # Page configuration
 st.set_page_config(
@@ -72,6 +155,12 @@ def initialize_session_state():
     if "max_dataset_date" not in st.session_state:
         st.session_state.max_dataset_date = get_latest_date_in_dataset()
         # st.session_state.max_dataset_date = pd.to_datetime("2025-09-24")
+    # New: control whether event highlights are shown
+    if "show_events" not in st.session_state:
+        st.session_state.show_events = True
+    # New: current page for simple navigation ('home' or 'performance')
+    if "page" not in st.session_state:
+        st.session_state.page = "home"
 
 
 # ---------- SIDEBAR ----------
@@ -82,9 +171,22 @@ def render_sidebar():
         st.session_state.mode = st.radio(
             "Select Mode:",
             options=['Lite', 'Pro'],
-            key="sidebar_mode_radio",  # ✅ unique key
+            key="sidebar_mode_radio",
             help="Lite: Basic prediction + charts\nPro: Full LLM interface + all tools"
         )
+
+        # Stacked navigation buttons: Home, Model Performance, Investment Glossary
+        st.markdown('<div style="display:flex; flex-direction:column; gap:6px;">', unsafe_allow_html=True)
+        if st.button("Home", key="sidebar_home", use_container_width=True):
+            st.session_state.page = "home"
+            safe_rerun()
+        if st.button("Model Performance Metrics", key="open_model_perf", use_container_width=True):
+            st.session_state.page = "performance"
+            safe_rerun()
+        if st.button("Investment Glossary", key="open_glossary", use_container_width=True):
+            st.session_state.page = "glossary"
+            safe_rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
 
         st.sidebar.header("Chart Filters")
         st.session_state.metric = st.selectbox(
@@ -93,6 +195,8 @@ def render_sidebar():
             index=["Closing", "Opening", "Daily High", "Daily Low", "Daily Current"].index(st.session_state.metric),
             key="metric_selector"
         )
+
+        # (Removed) Show Event Highlights control was here
 
         # Define the maximum available date from our dataset (last available date in historical data)
         MAX_DATASET_DATE = pd.to_datetime(get_latest_date_in_dataset())
@@ -170,7 +274,7 @@ def render_prediction_card(prediction):
 
 
 def render_feature_importance(features):
-    st.markdown("#### 🔍 Top Model Features")
+    st.markdown("##### 🔍 Top Model Features")
     col1, col2 = st.columns([3,2])
     with col1:
         fig = create_feature_importance_chart(features)
@@ -186,9 +290,156 @@ def render_feature_importance(features):
 
 
 def render_lite_mode():
+    
+    import requests
+    # News Channel (TOP SECTION)
+    url = f"https://finnhub.io/api/v1/news?category=general&token={MARKETSENTIMENT_API_KEY}"
+
+    try:
+        response = requests.get(url, timeout=5)
+        articles = response.json()
+    except Exception as e:
+        st.error(f"Error fetching news: {e}")
+        articles = []
+
+    st.markdown("##### Latest Market Headlines", unsafe_allow_html=True)
+
+    if not articles or not isinstance(articles, list):
+        st.warning("No recent S&P 500 news found.")
+    else:
+        articles = sorted(articles, key=lambda x: x.get("datetime", 0), reverse=True)
+        display_articles = articles[:20]
+
+        headlines_html = ""
+        for a in display_articles:
+            headline = a.get("headline", "Untitled")
+            link = a.get("url", "#")
+            sentiment = "neutral"
+            if any(w in headline.lower() for w in ["up", "gain", "growth", "rally", "record"]):
+                sentiment = "positive"
+            elif any(w in headline.lower() for w in ["down", "loss", "drop", "fall", "decline"]):
+                sentiment = "negative"
+
+            color = (
+                "#00ff99" if sentiment == "positive"
+                else "#ff4d4d" if sentiment == "negative"
+                else "white"
+            )
+            headlines_html += f'📈 <a href="{link}" target="_blank" style="color:{color}; text-decoration:none; margin-right:50px;">{headline}</a>'
+
+        st.markdown(
+            f"""
+            <div style="background-color:#001f3f; padding:5px; border-radius:8px; margin-bottom:5px;">
+                <marquee behavior="scroll" direction="left" scrollamount="5"
+                         style="font-size:20px; font-weight:500;">
+                    {headlines_html}
+                </marquee>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        
+    # =============================
+    # Macro & Sentiment Dashboard (FRED + Sentiment Combined)
+    # =============================
+    import requests
+    FRED_KEY = "167c610d0808df0df6fc03d8a7c9f611"  # 🔑 Replace with your own
+    base_url = "https://api.stlouisfed.org/fred/series/observations"
+
+    # --- Fetch Unemployment Rate (UNRATE) ---
+    params_un = {
+        "series_id": "UNRATE",
+        "api_key": FRED_KEY,
+        "file_type": "json",
+        "sort_order": "desc",
+        "limit": 1
+    }
+    try:
+        resp_un = requests.get(base_url, params=params_un, timeout=5)
+        data_un = resp_un.json().get("observations", [])
+        unemployment_rate = float(data_un[0].get("value", 0)) if data_un else None
+    except Exception:
+        unemployment_rate = None
+
+    # --- Fetch Public Debt to GDP Ratio (GFDEGDQ188S) ---
+    params_debt = {
+        "series_id": "GFDEGDQ188S",
+        "api_key": FRED_KEY,
+        "file_type": "json",
+        "sort_order": "desc",
+        "limit": 1
+    }
+    try:
+        resp_debt = requests.get(base_url, params=params_debt, timeout=5)
+        data_debt = resp_debt.json().get("observations", [])
+        public_debt_pct = float(data_debt[0].get("value", 0)) if data_debt else None
+    except Exception:
+        public_debt_pct = None
+
+    # --- Threshold Logic ---
+    def indicator_status(value, good_max):
+        if value is None:
+            return "N/A", "grey"
+        if value <= good_max:
+            return "Acceptable", "green"
+        else:
+            return "Bad", "red"
+
+    un_status, un_color = indicator_status(unemployment_rate, 6.0) # Unemployment: 0 to 6% acceptable (the closer to 0 the better) 6.1% and above BAD
+    debt_status, debt_color = indicator_status(public_debt_pct, 70.0) #Public Debt: 0 to 70% acceptable (the closer to 0 the better) 71% and above BAD
+
+
+    # --- Display Combined Indicators ---
+    st.markdown("##### Macro & Sentiment Dashboard")
+
+    # Use equal-width columns with a slightly larger gap and full-width panels
+    col1, col2 = st.columns([1, 1], gap="large")
+
+    panel_style = (
+        "padding:12px; border-radius:10px; "
+        "background:linear-gradient(180deg,#f8f9fa,#eef2f5); "
+        "border:1px solid rgba(0,0,0,0.06); box-shadow:0 2px 8px rgba(0,0,0,0.06); "
+        "width:100%; box-sizing:border-box;"
+    )
+
+    with col1:
+        # Show unemployment with status badge using computed color (stretches full column width)
+        un_display = f"{unemployment_rate:.1f}%" if unemployment_rate is not None else "N/A"
+        st.markdown(
+            f"<div style='{panel_style}'>"
+            f"<div style='font-size:1.0rem; font-weight:600;'>Unemployment Rate</div>"
+            f"<div style='font-size:1.6rem; margin-top:6px;'>{un_display}</div>"
+            f"<div style='margin-top:8px; color:{un_color}; font-weight:700;'>{un_status}</div>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+    with col2:
+        # Show public debt with status badge using computed color (stretches full column width)
+        debt_display = f"{public_debt_pct:.1f}%" if public_debt_pct is not None else "N/A"
+        st.markdown(
+            f"<div style='{panel_style}'>"
+            f"<div style='font-size:1.0rem; font-weight:600;'>Public Debt (% of GDP)</div>"
+            f"<div style='font-size:1.6rem; margin-top:6px;'>{debt_display}</div>"
+            f"<div style='margin-top:8px; color:{debt_color}; font-weight:700;'>{debt_status}</div>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+
+    # --- Optional Styling ---
+    st.markdown("""
+    <style>[data-testid="stMetricValue"] {font-size: 1.4rem !important;}
+    [data-testid="stMetricLabel"] {color: #1c1c1c;}
+    </style>
+    """, unsafe_allow_html=True)
+    # =============================
+    # 📈 Core UI: Header + Prediction
+    # =============================
     st.markdown('<p class="main-header">📈 FUREcast SPLG Predictor</p>', unsafe_allow_html=True)
     st.markdown('<p class="sub-header">Educational GBR-Based Market Analytics</p>', unsafe_allow_html=True)
-    
+
+    # --- Run model prediction ---
     if st.session_state.prediction_cache is None or st.button("🔄 Refresh Prediction", key="refresh_lite"):
         st.session_state.prediction_cache = predict_splg()
     prediction = st.session_state.prediction_cache
@@ -198,42 +449,193 @@ def render_lite_mode():
     render_feature_importance(prediction['top_features'])
     st.markdown("---")
 
+    # =============================
+    # 📊 Price Chart Section
+    # =============================
     metric = st.session_state.metric
     start_date = st.session_state.start_date
     end_date = st.session_state.end_date
     max_date = st.session_state.max_dataset_date
-    
+
     if start_date > end_date:
         st.error("🚫 Start date must be before end date.")
-        return
+        st.stop()
         
     # Ensure end date doesn't exceed dataset limit for price charts
     if end_date > max_date:
         end_date = max_date
         st.warning(f"⚠️ End date adjusted to maximum available date: {max_date.date()}")
 
-    st.markdown(f"#### 📊 {metric} Price Chart")
+    st.markdown(f"##### 📊 {metric} Price Chart")
     with st.spinner("Loading chart..."):
         try:
             # Map display name to DataFrame column name
             df_column = st.session_state.metric_mapping[metric]
-            fig = create_price_chart(df_column, pd.to_datetime(start_date), pd.to_datetime(end_date))
+            # Pass show_events flag from session state
+            fig = create_price_chart(df_column, pd.to_datetime(start_date), pd.to_datetime(end_date), show_events=st.session_state.show_events)
             st.plotly_chart(fig, config={"responsive": True, "width": 'stretch'}, key='price_chart')
         except Exception as e:
             st.error(f"❌ Chart failed to render: {e}")
 
+
+    # =============================
+    # 💡 How to Use Section
+    # =============================
     st.info("""
     **💡 How to Use This Tool:**
-    1. Review model prediction
-    2. Check confidence score
-    3. Examine feature influence
-    4. Compare with recent price trends
+    1. Review model prediction  
+    2. Check confidence score  
+    3. Examine feature influence  
+    4. Compare with recent price trends  
     *Educational use only.*
     """)
 
 
 # ---------- PRO MODE ----------
 def render_pro_mode():
+    import requests
+    # News Channel (TOP SECTION)
+    url = f"https://finnhub.io/api/v1/news?category=general&token={MARKETSENTIMENT_API_KEY}"
+
+    try:
+        response = requests.get(url, timeout=5)
+        articles = response.json()
+    except Exception as e:
+        st.error(f"Error fetching news: {e}")
+        articles = []
+
+    st.markdown("##### Latest Market Headlines", unsafe_allow_html=True)
+
+    if not articles or not isinstance(articles, list):
+        st.warning("No recent S&P 500 news found.")
+    else:
+        articles = sorted(articles, key=lambda x: x.get("datetime", 0), reverse=True)
+        display_articles = articles[:20]
+
+        headlines_html = ""
+        for a in display_articles:
+            headline = a.get("headline", "Untitled")
+            link = a.get("url", "#")
+            sentiment = "neutral"
+            if any(w in headline.lower() for w in ["up", "gain", "growth", "rally", "record"]):
+                sentiment = "positive"
+            elif any(w in headline.lower() for w in ["down", "loss", "drop", "fall", "decline"]):
+                sentiment = "negative"
+
+            color = (
+                "#00ff99" if sentiment == "positive"
+                else "#ff4d4d" if sentiment == "negative"
+                else "white"
+            )
+            headlines_html += f'📈 <a href="{link}" target="_blank" style="color:{color}; text-decoration:none; margin-right:50px;">{headline}</a>'
+
+        st.markdown(
+            f"""
+            <div style="background-color:#001f3f; padding:5px; border-radius:8px; margin-bottom:5px;">
+                <marquee behavior="scroll" direction="left" scrollamount="5"
+                         style="font-size:20px; font-weight:500;">
+                    {headlines_html}
+                </marquee>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        
+    # =============================
+    # Macro & Sentiment Dashboard (FRED + Sentiment Combined)
+    # =============================
+    import requests
+    FRED_KEY = "167c610d0808df0df6fc03d8a7c9f611"  # 🔑 Replace with your own
+    base_url = "https://api.stlouisfed.org/fred/series/observations"
+
+    # --- Fetch Unemployment Rate (UNRATE) ---
+    params_un = {
+        "series_id": "UNRATE",
+        "api_key": FRED_KEY,
+        "file_type": "json",
+        "sort_order": "desc",
+        "limit": 1
+    }
+    try:
+        resp_un = requests.get(base_url, params=params_un, timeout=5)
+        data_un = resp_un.json().get("observations", [])
+        unemployment_rate = float(data_un[0].get("value", 0)) if data_un else None
+    except Exception:
+        unemployment_rate = None
+
+    # --- Fetch Public Debt to GDP Ratio (GFDEGDQ188S) ---
+    params_debt = {
+        "series_id": "GFDEGDQ188S",
+        "api_key": FRED_KEY,
+        "file_type": "json",
+        "sort_order": "desc",
+        "limit": 1
+    }
+    try:
+        resp_debt = requests.get(base_url, params=params_debt, timeout=5)
+        data_debt = resp_debt.json().get("observations", [])
+        public_debt_pct = float(data_debt[0].get("value", 0)) if data_debt else None
+    except Exception:
+        public_debt_pct = None
+
+    # --- Threshold Logic ---
+    def indicator_status(value, good_max):
+        if value is None:
+            return "N/A", "grey"
+        if value <= good_max:
+            return "Acceptable", "green"
+        else:
+            return "Bad", "red"
+
+    un_status, un_color = indicator_status(unemployment_rate, 6.0) # Unemployment: 0 to 6% acceptable (the closer to 0 the better) 6.1% and above BAD
+    debt_status, debt_color = indicator_status(public_debt_pct, 70.0) #Public Debt: 0 to 70% acceptable (the closer to 0 the better) 71% and above BAD
+
+
+    # --- Display Combined Indicators ---
+    st.markdown("##### Macro & Sentiment Dashboard")
+
+    # Use equal-width columns with a slightly larger gap and full-width panels
+    col1, col2 = st.columns([1, 1], gap="large")
+
+    panel_style = (
+        "padding:12px; border-radius:10px; "
+        "background:linear-gradient(180deg,#f8f9fa,#eef2f5); "
+        "border:1px solid rgba(0,0,0,0.06); box-shadow:0 2px 8px rgba(0,0,0,0.06); "
+        "width:100%; box-sizing:border-box;"
+    )
+
+    with col1:
+        # Show unemployment with status badge using computed color (stretches full column width)
+        un_display = f"{unemployment_rate:.1f}%" if unemployment_rate is not None else "N/A"
+        st.markdown(
+            f"<div style='{panel_style}'>"
+            f"<div style='font-size:1.0rem; font-weight:600;'>Unemployment Rate</div>"
+            f"<div style='font-size:1.6rem; margin-top:6px;'>{un_display}</div>"
+            f"<div style='margin-top:8px; color:{un_color}; font-weight:700;'>{un_status}</div>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+    with col2:
+        # Show public debt with status badge using computed color (stretches full column width)
+        debt_display = f"{public_debt_pct:.1f}%" if public_debt_pct is not None else "N/A"
+        st.markdown(
+            f"<div style='{panel_style}'>"
+            f"<div style='font-size:1.0rem; font-weight:600;'>Public Debt (% of GDP)</div>"
+            f"<div style='font-size:1.6rem; margin-top:6px;'>{debt_display}</div>"
+            f"<div style='margin-top:8px; color:{debt_color}; font-weight:700;'>{debt_status}</div>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+
+    # --- Optional Styling ---
+    st.markdown("""
+    <style>[data-testid="stMetricValue"] {font-size: 1.4rem !important;}
+    [data-testid="stMetricLabel"] {color: #1c1c1c;}
+    </style>
+    """, unsafe_allow_html=True)
+    
     """Render Pro mode interface with LLM query capabilities"""
     st.markdown('<p class="main-header">🚀 FUREcast Pro Analytics</p>', unsafe_allow_html=True)
     st.markdown('<p class="sub-header">AI-Powered Investment Insights & Natural Language Interface</p>', unsafe_allow_html=True)
@@ -260,7 +662,7 @@ def render_pro_mode():
         with col4:
             if st.button("🔄 Refresh", key="pro_refresh_button"):
                 st.session_state.prediction_cache = predict_splg()
-                st.rerun()
+                safe_rerun()
     
     st.markdown("---")
     
@@ -394,7 +796,7 @@ def render_pro_mode():
         else:
             # Default to price chart - FIX: Add all required parameters
             default_start = max_dataset_date - pd.Timedelta(days=180)
-            fig = create_price_chart('close', default_start, max_dataset_date)
+            fig = create_price_chart('close', default_start, max_dataset_date, show_events=st.session_state.show_events)
             st.plotly_chart(fig, config={"width": 'stretch'}, key='price_chart')
     
     elif not query and submit:
@@ -402,15 +804,15 @@ def render_pro_mode():
     
     # Additional tools section - MOVED OUTSIDE the conditional logic
     st.markdown("---")
-    st.markdown("### 📊 Quick Analytics")
+    st.markdown("### 📊 Advanced Sector Analytics")
     
     tab1, tab2, tab3, tab4 = st.tabs(["Sector Risk", "Holdings Detail", "Price Trends", "Feature Analysis"])
-    
+
     with tab1:
         st.markdown("**Sector Risk Treemap** - Size by market cap, color by volatility")
         fig = create_sector_risk_treemap()
         st.plotly_chart(fig, config={"width": 'stretch'}, key='sector_risk_treemap_2')
-    
+
     with tab2:
         st.markdown("**SPLG Holdings Drill-Down** - Explore sectors and individual holdings")
         st.caption("Size = SPLG Weight (%). Click on sectors to drill down into holdings. Hover for detailed KPIs.")
@@ -428,7 +830,7 @@ def render_pro_mode():
         summary_df = get_sector_summary()
         if not summary_df.empty:
             st.dataframe(summary_df, width='stretch', hide_index=True)
-    
+
     with tab3:
         st.markdown("**SPLG Historical Performance**")
         metric = st.session_state.metric
@@ -436,9 +838,10 @@ def render_pro_mode():
         end_date = st.session_state.end_date
         # Map display name to DataFrame column name
         df_column = st.session_state.metric_mapping[metric]
-        fig = create_price_chart(df_column, pd.to_datetime(start_date), pd.to_datetime(end_date))
+        # Pass show_events flag
+        fig = create_price_chart(df_column, pd.to_datetime(start_date), pd.to_datetime(end_date), show_events=st.session_state.show_events)
         st.plotly_chart(fig, config={"width": 'stretch'}, key='price_chart_2')
-    
+
     with tab4:
         st.markdown("**Current Model Feature Importance**")
         fig = create_feature_importance_chart(prediction['top_features'])
@@ -458,6 +861,17 @@ def render_pro_mode():
 def main():
     initialize_session_state()
     render_sidebar()
+
+    # Simple page routing
+    if st.session_state.page == "performance":
+        render_performance_page()
+        return
+
+    # NEW: route glossary page
+    if st.session_state.page == "glossary":
+        render_glossary_page()
+        return
+
     if st.session_state.mode == 'Lite':
         render_lite_mode()
     else:
@@ -472,6 +886,155 @@ def main():
     </div>
     """, unsafe_allow_html=True)
 
+
+# --- remove or comment out any earlier immediate call to main() so functions defined later are available ---
+# if __name__ == "__main__":
+#     main()
+
+def render_performance_page():
+    """
+    Show model performance plots in tabs (like Quick Analytics).
+    Prefer dynamic plotting functions from pred_model.plots; fallback to PNGs
+    in pred_model/plots. Each plot gets its own tab for selection.
+    """
+    import inspect
+
+    st.markdown('<p class="main-header">📈 Model Performance Metrics</p>', unsafe_allow_html=True)
+    st.markdown("Select a plot tab to view model performance plots.")
+
+    items = []  # list of (label, fig_or_path)
+
+    # 1) Try to load plotting functions from pred_model.plots
+    try:
+        import pred_model.plots as perf_plots
+        preferred = [
+            "make_pred_vs_actual_figure",
+            "make_feature_importance_figure",
+            "make_residuals_figure",
+            "make_error_distribution_figure",
+            "make_training_validation_test_plots",
+        ]
+        added = set()
+        for name in preferred:
+            if hasattr(perf_plots, name) and callable(getattr(perf_plots, name)):
+                try:
+                    fig = getattr(perf_plots, name)()
+                    items.append((name, fig))
+                    added.add(name)
+                except Exception:
+                    pass
+
+        # auto-discover additional no-arg make_* functions
+        for n, fn in inspect.getmembers(perf_plots, inspect.isfunction):
+            if n.startswith("make_") and n not in added:
+                sig = inspect.signature(fn)
+                # allow functions with only optional args or *args/**kwargs
+                if all(p.default != inspect._empty or p.kind in (p.VAR_POSITIONAL, p.VAR_KEYWORD)
+                       for p in sig.parameters.values()):
+                    try:
+                        fig = fn()
+                        items.append((n, fig))
+                    except Exception:
+                        pass
+    except Exception:
+        # dynamic generation not available; we'll fallback to PNGs below
+        pass
+
+    # 2) Fallback: PNG files in pred_model/plots
+    if not items:
+        plots_dir = os.path.join(os.path.dirname(__file__), "pred_model", "plots")
+        if os.path.isdir(plots_dir):
+            png_files = sorted([f for f in os.listdir(plots_dir) if f.lower().endswith(".png")])
+            for fname in png_files:
+                items.append((os.path.splitext(fname)[0], os.path.join(plots_dir, fname)))
+
+    if not items:
+        st.info("No performance plots available (no dynamic functions and no PNGs found).")
+        if st.button("Back to Dashboard", key="back_from_perf"):
+            st.session_state.page = "home"
+            safe_rerun()
+        return
+
+    # map internal labels / filenames to friendly display names
+    label_map = {
+        "cumulative_returns": "Cumulative Returns",  # common spelling
+        "error_distribution": "Error Distribution",
+        "feature_importance": "Top Features",
+        "predictions_vs_actuals": "Prediction vs Actual",
+        "residuals": "Residuals",
+        "time_series_predictions": "Time Series Predictions",
+        "training_progress": "GBR Training Progress"
+    }
+
+    # build display labels (preserve original items list for content)
+    display_labels = []
+    for label, _ in items:
+        key = label.lower().replace(" ", "_")
+        display_labels.append(label_map.get(key, label.replace("_", " ").title()))
+
+    # Create tabs for each plot (like Quick Analytics) using the friendly labels
+    tabs = st.tabs(display_labels)
+    for tab, (label, content) in zip(tabs, items):
+        with tab:
+            # Matplotlib-like figure (has savefig)
+            try:
+                if hasattr(content, "savefig"):
+                    buf = io.BytesIO()
+                    content.savefig(buf, format="png", bbox_inches="tight")
+                    buf.seek(0)
+                    st.image(buf, use_container_width=True)
+                    buf.close()
+                    continue
+            except Exception:
+                pass
+
+            # Plotly figure
+            try:
+                if isinstance(content, go.Figure):
+                    st.plotly_chart(content, use_container_width=True)
+                    continue
+            except Exception:
+                pass
+
+            # PNG file path
+            if isinstance(content, str) and os.path.isfile(content):
+                st.image(content, use_container_width=True)
+                continue
+
+            # bytes / raw image
+            if isinstance(content, (bytes, bytearray)):
+                st.image(content, use_container_width=True)
+                continue
+
+            st.warning(f"Could not render plot: {label}")
+
+    st.markdown("---")
+    if st.button("Back to Dashboard", key="back_from_perf"):
+        st.session_state.page = "home"
+        safe_rerun()
+def render_performance_page_dynamic():
+    st.markdown("Generated plots (no disk files).")
+
+    # example: call function that returns a Matplotlib fig object from pred_model.plots
+    try:
+        from pred_model.plots import make_pred_vs_actual_figure, make_feature_importance_figure
+        figs = [
+            ("Pred vs Actual", make_pred_vs_actual_figure()),
+            ("Feature Importance", make_feature_importance_figure()),
+        ]
+        for title, fig in figs:
+            st.markdown(f"**{title}**")
+            buf = io.BytesIO()
+            fig.savefig(buf, format='png', bbox_inches='tight')
+            buf.seek(0)
+            st.image(buf, use_container_width=True)
+            buf.close()
+    except Exception as e:
+        st.error(f"Could not generate plots dynamically: {e}")
+
+    if st.button("Back to Dashboard", key="back_from_perf"):
+        st.session_state.page = "home"
+        safe_rerun()
 
 if __name__ == "__main__":
     main()
