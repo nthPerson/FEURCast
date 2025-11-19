@@ -127,7 +127,7 @@ def predict_splg(use_real_model: bool = True) -> Dict[str, Any]:
             result = predict_with_explanation(latest_features, model_bundle, top_n=5)
             
             # DEBUG
-            # print(f'USING PREDICTION MODEL (not dummy model)')
+            print(f'INFO - Using GBR prediction model (not dummy model)')
             
             # Format for app consumption
             return {
