@@ -207,7 +207,13 @@ def create_price_chart(metric, start_date, end_date, show_events: bool = True):
     # Get the actual column name from the mapping, or use the metric as-is if not in mapping (for backward compatibility)
     df_column = metric_mapping.get(metric, metric)
     
-    df = pd.read_csv("../../data/rich_features_SPLG_history_full.csv")
+    # Resolve data path relative to this file so it works on Streamlit Cloud
+    data_path = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'rich_features_SPLG_history_full.csv')
+    )
+    if not os.path.exists(data_path):
+        raise FileNotFoundError(f"Data file not found at {data_path}")
+    df = pd.read_csv(data_path)
     # Robust datetime parsing: handle "YYYY-MM-DD" and "YYYY-MM-DD HH:MM:SS" and similar
     try:
         # pandas >= 2.0 supports format='mixed'

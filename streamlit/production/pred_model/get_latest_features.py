@@ -8,13 +8,45 @@ from the SPLG dataset for making real-time predictions.
 import pandas as pd
 import numpy as np
 from pathlib import Path
+import os
 from typing import Optional
 
-# Setup paths
-MODULE_DIR = Path(__file__).parent
-PRED_MODEL_DIR = MODULE_DIR.parent
-DATA_PATH = PRED_MODEL_DIR.parent.parent / "data" / "rich_features_SPLG_history_full.csv"
+DATA_FILE_NAME = "rich_features_SPLG_history_full.csv"
 
+def _repo_root(start: Path) -> Path:
+    """
+    Walk upwards from `start` until we find a directory that contains a 'data' folder.
+    This makes pathing robust to different checkout locations and case differences (FEURCast vs feurcast).
+    """
+    start = start.resolve()
+    for cand in [start] + list(start.parents):
+        if (cand / "data").is_dir():
+            return cand
+    # Fallback: 2 parents up (streamlit/production/… -> repo root)
+    return start.parents[3] if len(start.parents) >= 4 else start.parent
+
+def _data_path() -> Path:
+    # Optional: allow override via env var
+    override = os.getenv("FEURCAST_DATA_DIR")
+    if override:
+        return (Path(override).expanduser().resolve() / DATA_FILE_NAME)
+    return _repo_root(Path(__file__)) / "data" / DATA_FILE_NAME
+
+DATA_PATH = _data_path()
+
+def _parse_dates(df: pd.DataFrame) -> pd.DataFrame:
+    # Robust date parsing for "YYYY-MM-DD" and "YYYY-MM-DD HH:MM:SS"
+    try:
+        df["date"] = pd.to_datetime(df["date"], format="mixed", errors="coerce")
+    except TypeError:
+        df["date"] = pd.to_datetime(df["date"], errors="coerce")
+        mask = df["date"].isna()
+        if mask.any():
+            df.loc[mask, "date"] = pd.to_datetime(
+                df.loc[mask, "date"].astype(str).str.slice(0, 10),
+                errors="coerce"
+            )
+    return df.dropna(subset=["date"])
 
 def get_latest_features(n_days: int = 1) -> pd.DataFrame:
     """
@@ -28,7 +60,7 @@ def get_latest_features(n_days: int = 1) -> pd.DataFrame:
     """
     # Load data
     df = pd.read_csv(DATA_PATH)
-    df['date'] = pd.to_datetime(df['date'])
+    df = _parse_dates(df)
     
     # Define columns
     metadata_cols = ['date', 'company_name', 'ticker']
@@ -55,7 +87,7 @@ def get_features_for_date(date_str: str) -> Optional[pd.DataFrame]:
     """
     # Load data
     df = pd.read_csv(DATA_PATH)
-    df['date'] = pd.to_datetime(df['date'])
+    df = _parse_dates(df)
     
     # Define columns
     metadata_cols = ['date', 'company_name', 'ticker']
@@ -63,7 +95,7 @@ def get_features_for_date(date_str: str) -> Optional[pd.DataFrame]:
     feature_cols = [col for col in df.columns if col not in metadata_cols + target_cols]
     
     # Find matching date
-    target_date = pd.to_datetime(date_str)
+    target_date = pd.to_datetime(date_str, errors='coerce')
     matching_row = df[df['date'] == target_date]
     
     if matching_row.empty:
@@ -80,7 +112,7 @@ def get_date_range() -> tuple:
         Tuple of (min_date, max_date) as strings
     """
     df = pd.read_csv(DATA_PATH)
-    df['date'] = pd.to_datetime(df['date'])
+    df = _parse_dates(df)
     
     return str(df['date'].min().date()), str(df['date'].max().date())
 
@@ -93,7 +125,7 @@ def get_latest_date() -> str:
         Date string in YYYY-MM-DD format
     """
     df = pd.read_csv(DATA_PATH)
-    df['date'] = pd.to_datetime(df['date'])
+    df = _parse_dates(df)
     
     return str(df['date'].max().date())
 
