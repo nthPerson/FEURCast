@@ -18,10 +18,19 @@ from openai import OpenAI
 
 def get_openai_client():
     """Initialize OpenAI client with API key from environment"""
-    from dotenv import load_dotenv
-    load_dotenv(os.path.join(os.path.dirname(__file__), '../..', '.env'))
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(os.path.join(os.path.dirname(__file__), '../..', '.env'))
+    except Exception:
+        pass
     api_key = os.getenv('OPENAI_API_KEY')
-    return OpenAI(api_key=api_key)
+    if not api_key:
+        try:
+            import streamlit as st
+            api_key = st.secrets.get('OPENAI_API_KEY', '')
+        except Exception:
+            api_key = ''
+    return OpenAI(api_key=api_key or None)
 
 
 def fetch_prices(tickers: List[str], start: str, end: str) -> pd.DataFrame:

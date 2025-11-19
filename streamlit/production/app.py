@@ -106,10 +106,23 @@ from llm_interface import (
 )
 
 # Load environment variables
-from dotenv import load_dotenv
-load_dotenv(os.path.join(os.path.dirname(__file__), '../..', '.env'))
-MARKETSENTIMENT_API_KEY = os.getenv('MARKETSENTIMENT_API_KEY')
-FRED_KEY= os.getenv('FRED_KEY')
+try:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(os.path.dirname(__file__), '../..', '.env'))
+except Exception:
+    pass
+
+def get_secret(name: str, default: str = "") -> str:
+    val = os.getenv(name)
+    if val:
+        return val
+    try:
+        return st.secrets.get(name, default)
+    except Exception:
+        return default
+
+MARKETSENTIMENT_API_KEY = get_secret('MARKETSENTIMENT_API_KEY', '')
+FRED_KEY = get_secret('FRED_KEY', '')
 # Note: bullish/bearish sentiment variables removed; UI shows headline-based summary only
 # ---------- STREAMLIT CONFIGURATION ----------
 
@@ -290,7 +303,6 @@ def render_feature_importance(features):
 
 
 def render_lite_mode():
-    
     import requests
     # News Channel (TOP SECTION)
     url = f"https://finnhub.io/api/v1/news?category=general&token={MARKETSENTIMENT_API_KEY}"
@@ -343,38 +355,42 @@ def render_lite_mode():
     # Macro & Sentiment Dashboard (FRED + Sentiment Combined)
     # =============================
     import requests
-    FRED_KEY = "167c610d0808df0df6fc03d8a7c9f611"  # 🔑 Replace with your own
+    # Use env/secrets-provided key; if missing, skip FRED calls gracefully
     base_url = "https://api.stlouisfed.org/fred/series/observations"
 
-    # --- Fetch Unemployment Rate (UNRATE) ---
-    params_un = {
-        "series_id": "UNRATE",
-        "api_key": FRED_KEY,
-        "file_type": "json",
-        "sort_order": "desc",
-        "limit": 1
-    }
-    try:
-        resp_un = requests.get(base_url, params=params_un, timeout=5)
-        data_un = resp_un.json().get("observations", [])
-        unemployment_rate = float(data_un[0].get("value", 0)) if data_un else None
-    except Exception:
+    if not FRED_KEY:
         unemployment_rate = None
-
-    # --- Fetch Public Debt to GDP Ratio (GFDEGDQ188S) ---
-    params_debt = {
-        "series_id": "GFDEGDQ188S",
-        "api_key": FRED_KEY,
-        "file_type": "json",
-        "sort_order": "desc",
-        "limit": 1
-    }
-    try:
-        resp_debt = requests.get(base_url, params=params_debt, timeout=5)
-        data_debt = resp_debt.json().get("observations", [])
-        public_debt_pct = float(data_debt[0].get("value", 0)) if data_debt else None
-    except Exception:
         public_debt_pct = None
+    else:
+        # --- Fetch Unemployment Rate (UNRATE) ---
+        params_un = {
+            "series_id": "UNRATE",
+            "api_key": FRED_KEY,
+            "file_type": "json",
+            "sort_order": "desc",
+            "limit": 1
+        }
+        try:
+            resp_un = requests.get(base_url, params=params_un, timeout=5)
+            data_un = resp_un.json().get("observations", [])
+            unemployment_rate = float(data_un[0].get("value", 0)) if data_un else None
+        except Exception:
+            unemployment_rate = None
+
+        # --- Fetch Public Debt to GDP Ratio (GFDEGDQ188S) ---
+        params_debt = {
+            "series_id": "GFDEGDQ188S",
+            "api_key": FRED_KEY,
+            "file_type": "json",
+            "sort_order": "desc",
+            "limit": 1
+        }
+        try:
+            resp_debt = requests.get(base_url, params=params_debt, timeout=5)
+            data_debt = resp_debt.json().get("observations", [])
+            public_debt_pct = float(data_debt[0].get("value", 0)) if data_debt else None
+        except Exception:
+            public_debt_pct = None
 
     # --- Threshold Logic ---
     def indicator_status(value, good_max):
@@ -545,98 +561,46 @@ def render_pro_mode():
     # Macro & Sentiment Dashboard (FRED + Sentiment Combined)
     # =============================
     import requests
-    FRED_KEY = "167c610d0808df0df6fc03d8a7c9f611"  # 🔑 Replace with your own
     base_url = "https://api.stlouisfed.org/fred/series/observations"
 
-    # --- Fetch Unemployment Rate (UNRATE) ---
-    params_un = {
-        "series_id": "UNRATE",
-        "api_key": FRED_KEY,
-        "file_type": "json",
-        "sort_order": "desc",
-        "limit": 1
-    }
-    try:
-        resp_un = requests.get(base_url, params=params_un, timeout=5)
-        data_un = resp_un.json().get("observations", [])
-        unemployment_rate = float(data_un[0].get("value", 0)) if data_un else None
-    except Exception:
+    if not FRED_KEY:
         unemployment_rate = None
-
-    # --- Fetch Public Debt to GDP Ratio (GFDEGDQ188S) ---
-    params_debt = {
-        "series_id": "GFDEGDQ188S",
-        "api_key": FRED_KEY,
-        "file_type": "json",
-        "sort_order": "desc",
-        "limit": 1
-    }
-    try:
-        resp_debt = requests.get(base_url, params=params_debt, timeout=5)
-        data_debt = resp_debt.json().get("observations", [])
-        public_debt_pct = float(data_debt[0].get("value", 0)) if data_debt else None
-    except Exception:
         public_debt_pct = None
+    else:
+        # --- Fetch Unemployment Rate (UNRATE) ---
+        params_un = {
+            "series_id": "UNRATE",
+            "api_key": FRED_KEY,
+            "file_type": "json",
+            "sort_order": "desc",
+            "limit": 1
+        }
+        try:
+            resp_un = requests.get(base_url, params=params_un, timeout=5)
+            data_un = resp_un.json().get("observations", [])
+            unemployment_rate = float(data_un[0].get("value", 0)) if data_un else None
+        except Exception:
+            unemployment_rate = None
 
-    # --- Threshold Logic ---
-    def indicator_status(value, good_max):
-        if value is None:
-            return "N/A", "grey"
-        if value <= good_max:
-            return "Acceptable", "green"
-        else:
-            return "Bad", "red"
+        # --- Fetch Public Debt to GDP Ratio (GFDEGDQ188S) ---
+        params_debt = {
+            "series_id": "GFDEGDQ188S",
+            "api_key": FRED_KEY,
+            "file_type": "json",
+            "sort_order": "desc",
+            "limit": 1
+        }
+        try:
+            resp_debt = requests.get(base_url, params=params_debt, timeout=5)
+            data_debt = resp_debt.json().get("observations", [])
+            public_debt_pct = float(data_debt[0].get("value", 0)) if data_debt else None
+        except Exception:
+            public_debt_pct = None
+    # ...existing code...
 
-    un_status, un_color = indicator_status(unemployment_rate, 6.0) # Unemployment: 0 to 6% acceptable (the closer to 0 the better) 6.1% and above BAD
-    debt_status, debt_color = indicator_status(public_debt_pct, 70.0) #Public Debt: 0 to 70% acceptable (the closer to 0 the better) 71% and above BAD
-
-
-    # --- Display Combined Indicators ---
-    st.markdown("##### Macro & Sentiment Dashboard")
-
-    # Use equal-width columns with a slightly larger gap and full-width panels
-    col1, col2 = st.columns([1, 1], gap="large")
-
-    panel_style = (
-        "padding:12px; border-radius:10px; "
-        "background:linear-gradient(180deg,#f8f9fa,#eef2f5); "
-        "border:1px solid rgba(0,0,0,0.06); box-shadow:0 2px 8px rgba(0,0,0,0.06); "
-        "width:100%; box-sizing:border-box;"
-    )
-
-    with col1:
-        # Show unemployment with status badge using computed color (stretches full column width)
-        un_display = f"{unemployment_rate:.1f}%" if unemployment_rate is not None else "N/A"
-        st.markdown(
-            f"<div style='{panel_style}'>"
-            f"<div style='font-size:1.0rem; font-weight:600;'>Unemployment Rate</div>"
-            f"<div style='font-size:1.6rem; margin-top:6px;'>{un_display}</div>"
-            f"<div style='margin-top:8px; color:{un_color}; font-weight:700;'>{un_status}</div>"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
-
-    with col2:
-        # Show public debt with status badge using computed color (stretches full column width)
-        debt_display = f"{public_debt_pct:.1f}%" if public_debt_pct is not None else "N/A"
-        st.markdown(
-            f"<div style='{panel_style}'>"
-            f"<div style='font-size:1.0rem; font-weight:600;'>Public Debt (% of GDP)</div>"
-            f"<div style='font-size:1.6rem; margin-top:6px;'>{debt_display}</div>"
-            f"<div style='margin-top:8px; color:{debt_color}; font-weight:700;'>{debt_status}</div>"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
-
-
-    # --- Optional Styling ---
-    st.markdown("""
-    <style>[data-testid="stMetricValue"] {font-size: 1.4rem !important;}
-    [data-testid="stMetricLabel"] {color: #1c1c1c;}
-    </style>
-    """, unsafe_allow_html=True)
-    
-    """Render Pro mode interface with LLM query capabilities"""
+    # =============================
+    # 📈 Core UI: Header + Prediction
+    # =============================
     st.markdown('<p class="main-header">🚀 FUREcast Pro Analytics</p>', unsafe_allow_html=True)
     st.markdown('<p class="sub-header">AI-Powered Investment Insights & Natural Language Interface</p>', unsafe_allow_html=True)
     
