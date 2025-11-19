@@ -199,10 +199,29 @@ def create_price_chart(metric, start_date, end_date, show_events: bool = True):
     df_column = metric_mapping.get(metric, metric)
     
     df = pd.read_csv("../../data/rich_features_SPLG_history_full.csv")
-    # print("CSV loaded:", df.head())  # Debugging line
+    # Robust datetime parsing: handle "YYYY-MM-DD" and "YYYY-MM-DD HH:MM:SS" and similar
+    try:
+        # pandas >= 2.0 supports format='mixed'
+        df['date'] = pd.to_datetime(df['date'], format='mixed', errors='coerce', utc=False)
+    except TypeError:
+        # fallback for older pandas: try generic parse then trim to date if needed
+        df['date'] = pd.to_datetime(df['date'], errors='coerce', utc=False)
+        # If any still NaT, try slicing first 10 chars (YYYY-MM-DD)
+        mask = df['date'].isna()
+        if mask.any():
+            df.loc[mask, 'date'] = pd.to_datetime(
+                df.loc[mask, 'date'].astype(str).str.slice(0, 10),
+                errors='coerce',
+                utc=False
+            )
 
-    df['date'] = pd.to_datetime(df['date'])
-    
+    # Drop rows we couldn't parse
+    before = len(df)
+    df = df.dropna(subset=['date']).copy()
+    if len(df) < before:
+        # optional: avoid noisy logs, but keeps app stable
+        pass
+
     # Ensure all dates are Timestamps
     start_date = pd.to_datetime(start_date)
     end_date = pd.to_datetime(end_date)
@@ -212,7 +231,7 @@ def create_price_chart(metric, start_date, end_date, show_events: bool = True):
     
     # Adjust end_date if it exceeds the maximum available date
     if end_date > max_available_date:
-        print(f"Warning: Requested end date {end_date.date()} exceeds available data. Using maximum available date: {max_available_date.date()}")
+        # print(f"Warning: Requested end date {end_date.date()} exceeds available data. Using maximum available date: {max_available_date.date()}")
         end_date = max_available_date
     
     df = df[(df['date'] >= start_date) & (df['date'] <= end_date)]
@@ -660,7 +679,15 @@ def viz_from_spec(spec: Dict[str, Any]) -> go.Figure:
     elif chart_type == 'line' and 'sectors' in spec:
         return create_sector_comparison_chart(spec['sectors'])
     elif chart_type == 'price':
-        return create_price_chart(spec.get('ticker', 'SPLG'), spec.get('days', 180))
+        # Build a reasonable date range and let create_price_chart clamp to dataset max
+        days = int(spec.get('days', 180))
+        end_date = pd.to_datetime('today').normalize()
+        start_date = end_date - pd.Timedelta(days=days)
+        # default to 'close' metric; create_price_chart handles mapping
+        return create_price_chart('close', start_date, end_date, show_events=True)
     else:
-        # Default to price chart
-        return create_price_chart()
+        # Default to a price chart
+        days = 180
+        end_date = pd.to_datetime('today').normalize()
+        start_date = end_date - pd.Timedelta(days=days)
+        return create_price_chart('close', start_date, end_date, show_events=True)
