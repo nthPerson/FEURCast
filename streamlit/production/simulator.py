@@ -134,7 +134,8 @@ def predict_splg(use_real_model: bool = True) -> Dict[str, Any]:
                 'predicted_return': result['predicted_return'],
                 'direction': result['direction'],
                 'confidence': result['confidence'],
-                'top_features': result['top_features']
+                'top_features': result['top_features'],
+                'model_source': 'real'
             }
             
         except FileNotFoundError as e:
@@ -179,6 +180,8 @@ Make the prediction realistic based on current market conditions. Features shoul
             else:
                 result['direction'] = 'neutral'
                 
+            # Tag as simulated so UI can conditionally show refresh button
+            result['model_source'] = 'simulated'
             return result
         except Exception as e:
             # Fallback to static data if API fails
@@ -192,7 +195,8 @@ Make the prediction realistic based on current market conditions. Features shoul
                     {'name': 'Volatility_5d', 'importance': 0.15},
                     {'name': 'MACD_signal', 'importance': 0.12},
                     {'name': 'Volume_ratio', 'importance': 0.09}
-                ]
+                ],
+                'model_source': 'simulated'
             }
 def create_price_chart(metric, start_date, end_date, show_events: bool = True):
     # Mapping between display names and DataFrame columns

@@ -250,40 +250,37 @@ def render_sidebar():
 
 # ---------- LITE MODE ----------
 def render_prediction_card(prediction):
+    """Render a full-width colored prediction card (Lite mode).
+    Card now includes direction, expected return, confidence and timeframe
+    inside a single uniformly colored panel, matching Pro mode styling.
+    """
     direction = prediction['direction']
     pred_return = prediction['predicted_return'] * 100
     confidence = prediction['confidence']
-    if direction == 'up': 
+
+    if direction == 'up':
         color, emoji = '#28a745', '📈'
-    elif direction == 'down': 
+    elif direction == 'down':
         color, emoji = '#dc3545', '📉'
-    else: 
+    else:
         color, emoji = '#ffc107', '➡️'
 
-    col1, col2, col3 = st.columns([2,1,1])
-    with col1:
-        st.markdown(f"""
-        <div style='background-color: {color}; padding: 1.5rem; border-radius: 10px; color: white;'>
-            <h2 style='margin: 0; color: white;'>{emoji} Model Prediction</h2>
-            <h1 style='margin: 0.5rem 0; color: white;'>{direction.upper()}</h1>
-            <p style='margin: 0; font-size: 1.2rem;'>Expected Return: {pred_return:+.2f}%</p>
+    st.markdown(
+        f"""
+        <div style="background-color:{color}; padding:1.4rem 1.8rem; border-radius:12px; color:#fff; width:100%; box-sizing:border-box;">
+            <div style="display:flex; flex-wrap:wrap; align-items:center; gap:2.5rem;">
+                <div style="min-width:160px;">
+                    <div style="font-size:1.1rem; font-weight:600;">{emoji} Model Prediction</div>
+                    <div style="font-size:2.1rem; font-weight:800; line-height:1; margin-top:4px;">{direction.upper()}</div>
+                </div>
+                <div style="font-size:1.05rem; font-weight:500;">Expected Return:<br><span style="font-size:1.4rem; font-weight:700;">{pred_return:+.2f}%</span></div>
+                <div style="font-size:1.05rem; font-weight:500;">Confidence:<br><span style="font-size:1.4rem; font-weight:700;">{confidence}</span></div>
+                <div style="font-size:1.05rem; font-weight:500;">Timeframe:<br><span style="font-size:1.4rem; font-weight:700;">Next Day</span></div>
+            </div>
         </div>
-        """, unsafe_allow_html=True)
-    
-    with col2:
-        st.metric(
-            "Confidence Score",
-            confidence, # confidence is currently a string (used to be a float), so just pass as parameter
-            # f"{float(confidence):.1%}",  # original AI-generated confidence was a float
-            help="Model's confidence in this prediction"
-        )
-    
-    with col3:
-        st.metric(
-            "Timeframe",
-            "Next Day",
-            help="Prediction horizon"
-        )
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_feature_importance(features):
@@ -456,9 +453,15 @@ def render_lite_mode():
     st.markdown('<p class="sub-header">Educational GBR-Based Market Analytics</p>', unsafe_allow_html=True)
 
     # --- Run model prediction ---
-    if st.session_state.prediction_cache is None or st.button("🔄 Refresh Prediction", key="refresh_lite"):
+    if st.session_state.prediction_cache is None:
         st.session_state.prediction_cache = predict_splg()
     prediction = st.session_state.prediction_cache
+
+    # Show refresh button only if using simulated model
+    if prediction.get('model_source') == 'simulated':
+        if st.button("🔄 Refresh Prediction", key="refresh_lite"):
+            st.session_state.prediction_cache = predict_splg()
+            prediction = st.session_state.prediction_cache
 
     render_prediction_card(prediction)
     st.markdown("---")
@@ -612,19 +615,36 @@ def render_pro_mode():
         if st.session_state.prediction_cache is None:
             with st.spinner("Generating prediction..."):
                 st.session_state.prediction_cache = predict_splg()
-        
+
         prediction = st.session_state.prediction_cache
-        
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("Direction", prediction['direction'].upper())
-        with col2:
-            st.metric("Expected Return", f"{prediction['predicted_return']*100:+.2f}%")
-        with col3:
-            st.metric("Confidence", f"{prediction['confidence']}")
-            # st.metric("Confidence", f"{prediction['confidence']:.1%}")
-        with col4:
-            if st.button("🔄 Refresh", key="pro_refresh_button"):
+        direction = prediction['direction']
+        if direction == 'up':
+            color, emoji = '#28a745', '📈'
+        elif direction == 'down':
+            color, emoji = '#dc3545', '📉'
+        else:
+            color, emoji = '#ffc107', '➡️'
+
+        # Colored panel mimicking Lite card but inside expander
+        st.markdown(
+            f"""
+            <div style="background-color:{color}; padding:1rem 1.4rem; border-radius:10px; color:#fff; width:100%; box-sizing:border-box; margin-bottom:0.75rem;">
+                <div style="display:flex; flex-wrap:wrap; gap:2rem; align-items:flex-start;">
+                    <div style="min-width:150px;">
+                        <div style="font-size:1.0rem; font-weight:600;">{emoji} Prediction</div>
+                        <div style="font-size:1.9rem; font-weight:800; line-height:1; margin-top:4px;">{direction.upper()}</div>
+                    </div>
+                    <div style="font-size:0.95rem; font-weight:500;">Expected Return:<br><span style="font-size:1.3rem; font-weight:700;">{prediction['predicted_return']*100:+.2f}%</span></div>
+                    <div style="font-size:0.95rem; font-weight:500;">Confidence:<br><span style="font-size:1.3rem; font-weight:700;">{prediction['confidence']}</span></div>
+                    <div style="font-size:0.95rem; font-weight:500;">Timeframe:<br><span style="font-size:1.3rem; font-weight:700;">Next Day</span></div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        # Conditional refresh button only if simulated
+        if prediction.get('model_source') == 'simulated':
+            if st.button("🔄 Refresh Prediction", key="pro_refresh_button"):
                 st.session_state.prediction_cache = predict_splg()
                 safe_rerun()
     
