@@ -358,8 +358,11 @@ def create_price_chart(metric, start_date, end_date, show_events: bool = True):
         plot_df['impact'] = ''
         # labels remain default
 
-    # Build customdata for hovertemplate
-    customdata_all = plot_df[['event', 'category', 'impact']].astype(str).values
+    # Build customdata arrays for hovertemplate
+    # Base trace: include next-day return for hover (% format)
+    customdata_returns = plot_df[['target_return_t1']].values
+    # Event trace: include return plus event metadata
+    customdata_all = plot_df[['target_return_t1', 'event', 'category', 'impact']].astype(object).values
 
     # Boolean mask for rows that have an event
     has_event = plot_df['event'].astype(str).str.strip() != ''
@@ -382,10 +385,12 @@ def create_price_chart(metric, start_date, end_date, show_events: bool = True):
         mode='lines',
         name=display_name,
         line=dict(width=base_line_width, color=base_line_color),
+        customdata=customdata_returns,
         hoverinfo='x+y',
         hovertemplate=(
             "Date: %{x|%Y-%m-%d}<br>"
-            f"{display_name} Price: $%{{y:.2f}}<extra></extra>"
+            f"{display_name} Price: $%{{y:.2f}}<br>"
+            "Next-Day Return: %{customdata[0]:.2%}<extra></extra>"
         )
     ))
 
@@ -403,9 +408,10 @@ def create_price_chart(metric, start_date, end_date, show_events: bool = True):
             hovertemplate=(
                 "Date: %{x|%Y-%m-%d}<br>"
                 f"{display_name} Price: $%{{y:.2f}}<br>"
-                f"{event_label}: %{{customdata[0]}}<br>"
-                f"{category_label}: %{{customdata[1]}}<br>"
-                f"{impact_label}: %{{customdata[2]}}<extra></extra>"
+                "Next-Day Return: %{customdata[0]:.2%}<br>"
+                f"{event_label}: %{{customdata[1]}}<br>"
+                f"{category_label}: %{{customdata[2]}}<br>"
+                f"{impact_label}: %{{customdata[3]}}<extra></extra>"
             )
         ))
 

@@ -163,11 +163,12 @@ def initialize_session_state():
     if "metric" not in st.session_state: st.session_state.metric = "Closing"
     if "start_date" not in st.session_state: 
         st.session_state.start_date = pd.to_datetime("2023-01-01")
-    if "end_date" not in st.session_state: 
-        st.session_state.end_date = pd.to_datetime("2025-09-24")  # Maximum date in our dataset
+    # Ensure we capture the latest available dataset date first, then default end_date to it.
     if "max_dataset_date" not in st.session_state:
         st.session_state.max_dataset_date = get_latest_date_in_dataset()
-        # st.session_state.max_dataset_date = pd.to_datetime("2025-09-24")
+    if "end_date" not in st.session_state:
+        # Default end date now dynamically set to latest available date
+        st.session_state.end_date = st.session_state.max_dataset_date
     # New: control whether event highlights are shown
     if "show_events" not in st.session_state:
         st.session_state.show_events = True
