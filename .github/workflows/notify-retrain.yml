@@ -4,15 +4,79 @@ name: Training Notifications
 on:
   workflow_run:
     workflows: ["Daily Model Retrain"]
-    types:
-      - completed
+    types: [completed]
 
 jobs:
   notify:
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
-      - name: Send notification
-        if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+      - name: Prepare metadata
+        id: meta
         run: |
-          echo "Training failed - add your notification service here"
-          # Example: Slack webhook, email, etc.
+          echo "status=${{ github.event.workflow_run.conclusion }}" >> $GITHUB_OUTPUT
+          echo "run_url=${{ github.event.workflow_run.html_url }}" >> $GITHUB_OUTPUT
+          echo "run_id=${{ github.event.workflow_run.id }}" >> $GITHUB_OUTPUT
+          echo "run_number=${{ github.event.workflow_run.run_number }}" >> $GITHUB_OUTPUT
+          echo "started_at=${{ github.event.workflow_run.run_started_at }}" >> $GITHUB_OUTPUT
+          echo "updated_at=${{ github.event.workflow_run.updated_at }}" >> $GITHUB_OUTPUT
+
+      - name: Send success email
+        if: ${{ github.event.workflow_run.conclusion == 'success' }}
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "✅ Daily Model Retrain Succeeded (Run #${{ steps.meta.outputs.run_number }})"
+          to: ${{ secrets.TO_EMAIL }}
+          from: ${{ secrets.FROM_EMAIL }}
+          body: |
+            Daily model retrain succeeded.
+            Run Number: ${{ steps.meta.outputs.run_number }}
+            Status: ${{ steps.meta.outputs.status }}
+            Started: ${{ steps.meta.outputs.started_at }}
+            Completed: ${{ steps.meta.outputs.updated_at }}
+            Details: ${{ steps.meta.outputs.run_url }}
+
+      - name: Send failure email
+        if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "⚠️ Daily Model Retrain FAILED (Run #${{ steps.meta.outputs.run_number }})"
+          to: ${{ secrets.TO_EMAIL }}
+          from: ${{ secrets.FROM_EMAIL }}
+          body: |
+            Daily model retrain failed.
+            Run Number: ${{ steps.meta.outputs.run_number }}
+            Status: ${{ steps.meta.outputs.status }}
+            Started: ${{ steps.meta.outputs.started_at }}
+            Completed: ${{ steps.meta.outputs.updated_at }}
+            Inspect logs and artifacts: ${{ steps.meta.outputs.run_url }}
+
+      - name: Send cancelled email
+        if: ${{ github.event.workflow_run.conclusion == 'cancelled' }}
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "⛔ Daily Model Retrain Cancelled (Run #${{ steps.meta.outputs.run_number }})"
+          to: ${{ secrets.TO_EMAIL }}
+          from: ${{ secrets.FROM_EMAIL }}
+          body: |
+            Daily model retrain was cancelled.
+            Run Number: ${{ steps.meta.outputs.run_number }}
+            Started: ${{ steps.meta.outputs.started_at }}
+            Details: ${{ steps.meta.outputs.run_url }}
+
+      - name: Fallback (echo only)
+        if: ${{ always() && (github.event.workflow_run.conclusion != 'success' && github.event.workflow_run.conclusion != 'failure' && github.event.workflow_run.conclusion != 'cancelled') }}
+        run: |
+          echo "Run concluded with status: ${{ github.event.workflow_run.conclusion }}"
