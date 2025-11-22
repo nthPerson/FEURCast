@@ -471,9 +471,9 @@ def create_sector_risk_treemap() -> go.Figure:
     sectors = {
         'Technology': {'size': 28.5, 'volatility': 0.185},
         'Healthcare': {'size': 13.2, 'volatility': 0.142},
-        'Financials': {'size': 13.8, 'volatility': 0.208},
+        'Financial': {'size': 13.8, 'volatility': 0.208},
         'Consumer Discretionary': {'size': 10.3, 'volatility': 0.195},
-        'Industrials': {'size': 8.7, 'volatility': 0.178},
+        'Industrial': {'size': 8.7, 'volatility': 0.178},
         'Communications': {'size': 8.4, 'volatility': 0.165},
         'Consumer Staples': {'size': 6.8, 'volatility': 0.118},
         'Energy': {'size': 4.2, 'volatility': 0.295},
@@ -501,21 +501,22 @@ def create_sector_risk_treemap() -> go.Figure:
     )
 
     fig.update_traces(
-        # display label and formatted value inside tiles (e.g. "Technology\n28.5%")
+        # display label inside tiles (e.g. "Technology")
         textposition='middle center',
         textfont=dict(size=14),
-        texttemplate='%{label}<br>%{value:.1f}%', 
+        texttemplate='%{label}',
         # hover shows sector, size with percent sign, and volatility as percent
         hovertemplate=(
             'sector=%{label}<br>'
             'size=%{value:.1f}%<br>'
-            'volatility=%{customdata[0]:.1f}%<extra></extra>'
+            'volatility=%{customdata[0]:.1f}%<br>'
+            'Size of block indicates market share and color of box indicates volatility<extra></extra>'
         )
     )
     
     fig.update_layout(
         height=500,
-        coloraxis_colorbar=dict(title="Volatility")
+        coloraxis_colorbar=dict(title="Volatility (%)", tickformat='.1%')
     )
     
     return fig

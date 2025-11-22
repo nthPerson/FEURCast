@@ -26,7 +26,7 @@ def render_glossary_page():
     Render the Investment Glossary page. Expects investment_glossary.csv at repo root
     or data/ folder. Shows table, search box, download and Back button.
     """
-    st.markdown('<p class="main-header">📚 Investment Glossary</p>', unsafe_allow_html=True)
+    st.markdown('<p class="main-header">Investment Glossary</p>', unsafe_allow_html=True)
     st.markdown("Definitions of common finance/investment terms.")
 
     # Try a couple of likely locations
@@ -139,6 +139,22 @@ st.markdown("""
 <style>
     .main-header { font-size: 2.5rem; font-weight: bold; color: #2E86AB; margin-bottom: 0.5rem; }
     .sub-header { font-size: 1.2rem; color: #666; margin-bottom: 2rem; }
+    /* Chart-style header: match the visual of 'Latest Market Headlines' */
+    /* Prominent chart/section headers used across Lite & Pro
+       - Light mode: black text
+       - Dark mode: white text and 1.5x font size for emphasis */
+    .chart-header { font-size: 1.20rem; font-weight: 800; color: #0b0d10; margin: 0.6rem 0; }
+    /* Streamlit sets theme on the <html> element via data-theme attribute */
+    html[data-theme='dark'] .chart-header {
+        color: #ffffff !important;
+        font-size: calc(1.20rem * 1.5) !important;
+        font-weight: 800 !important;
+    }
+    html[data-theme='light'] .chart-header {
+        color: #0b0d10 !important;
+        font-size: 1.20rem !important;
+        font-weight: 800 !important;
+    }
     .feature-item { display: flex; justify-content: space-between; padding: 0.5rem; border-bottom: 1px solid #eee; }
     .disclaimer { background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 1rem; border-radius: 4px; margin: 1rem 0; }
 </style>
@@ -177,75 +193,262 @@ def initialize_session_state():
         st.session_state.page = "home"
 
 
+# --------- Navigation helpers & callbacks ----------
+def _sidebar_mode_changed():
+    # keep session_state.mode in sync when the top-nav mode radio changes.
+    # Use a unique widget key `topnav_mode` to avoid duplication.
+    mode = st.session_state.get("topnav_mode", st.session_state.get("mode", "Lite"))
+    st.session_state.mode = mode
+
+
+def _set_page(page_key: str, nav_label: str = None):
+    """Helper for nav buttons: set page and optional sidebar_nav label then rerun."""
+    st.session_state.page = page_key
+    if nav_label is not None:
+        st.session_state.sidebar_nav = nav_label
+    safe_rerun()
+
+
+def render_top_nav():
+    """Render a simple top horizontal navigation bar placed above main content."""
+    # Shortened labels so they remain single-line and neat
+    nav_items = [
+        ("Home", "home"),
+        ("Performance", "performance"),
+        ("Glossary", "glossary"),
+    ]
+    current = st.session_state.get("page", "home")
+
+    cols = st.columns([1] * len(nav_items) + [2])
+
+    # Inline CSS for nav tiles (active + inactive)
+    active_color = "#f4f6f8"  # light grey background
+    active_text = "#0b0d10"   # dark text for high contrast on light bg
+    active_font_px = 19
+
+    css = f"""
+    <style>
+    /* Unified light-style nav tiles: light background, dark text, uniform height */
+    :root {{ --nav-bg: #f6f8fb; --nav-text: #0b0d10; --nav-border: rgba(15,23,42,0.06); --nav-active-bg: #eaf6ff; --nav-accent: #f5f7f9; }}
+
+    section[data-testid='stHorizontalBlock'] > div div button,
+    .nav-tile {{
+        background: var(--nav-bg) !important;
+        color: var(--nav-text) !important;
+        border-radius: 10px !important;
+        padding: 0 18px !important;
+        font-weight: 700 !important;
+        font-size: 15px !important;
+        border: 2px solid var(--nav-border) !important; /* keep same width as active */
+        text-align: center !important;
+        cursor: pointer !important;
+        display: block !important; /* ensure consistent sizing */
+        align-items: center !important;
+        justify-content: center !important;
+        width: 100% !important; /* fill the column so widths are uniform */
+        height: 56px !important; /* fixed uniform height */
+        line-height: 1.1 !important;
+        /* keep label text on a single line, ellipsize if too long */
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        box-sizing: border-box !important;
+    }}
+
+    /* Make button inner text wrap nicely and center vertically */
+    section[data-testid='stHorizontalBlock'] > div div button > div {{
+        display:flex; align-items:center; justify-content:center; height:100%; width:100%;
+    }}
+
+    /* Hover effect: subtle, flatter shadow for a cleaner look */
+    section[data-testid='stHorizontalBlock'] > div div button:hover,
+    .nav-tile:hover {{
+        box-shadow: 0 2px 6px rgba(0,0,0,0.04) !important;
+    }}
+
+    /* Active appearance: subtle blue accent border and slightly different background */
+    .nav-active,
+    section[data-testid='stHorizontalBlock'] > div div button.nav-active {{
+        /* Only change background and text color for active state so size remains identical */
+        background: var(--nav-active-bg) !important;
+        color: var(--nav-text) !important;
+        border: 2px solid var(--nav-border) !important; /* same border width as inactive */
+        box-shadow: none !important; /* avoid adding shadows that change perceived size */
+    }}
+
+    /* Reduce any extra margin Streamlit may add so tiles align neatly */
+    section[data-testid='stHorizontalBlock'] > div > div {{ padding: 6px !important; }}
+    </style>
+    """
+
+    # Compute which nav button (by position) is active so we can target it with CSS
+    try:
+        active_idx = next(i + 1 for i, (_, k) in enumerate(nav_items) if k == current)
+    except StopIteration:
+        active_idx = 1
+
+    # Update CSS to style the active button (position-based) so all nav items are rendered
+    # as Streamlit buttons (identical DOM) and only their colors change when active.
+    # Active styling: only change background color to accent and text to white
+    # Target the nth column's button (columns render as sibling divs). Using
+    # the column-level nth-child ensures we select the correct button even when
+    # Streamlit nests extra wrappers inside each column div.
+        css_active = css + f"\n<style>section[data-testid='stHorizontalBlock'] > div > div:nth-child({active_idx}) button {{ background: #ffffff !important; color: var(--nav-text) !important; border: 2px solid var(--nav-border) !important; border-radius:12px !important; box-shadow: 0 2px 6px rgba(0,0,0,0.04) !important; }}</style>"
+        st.markdown(css_active, unsafe_allow_html=True)
+
+        # Some Streamlit versions wrap column content with extra divs; to be robust
+        # add a tiny client-side script that locates the active button and forces
+        # the active styling. It first tries to match by visible label text, then
+        # falls back to the nth-column approach.
+        try:
+                active_label = next(lbl for lbl, k in nav_items if k == current)
+        except StopIteration:
+                active_label = None
+
+        # Escape label for JS string literal
+        safe_label = (active_label or '').replace("\\", "\\\\").replace("'", "\\'")
+
+        js = f"""
+        <script>
+        (function(){{
+            function applyByLabel(lbl){{
+                try {{
+                    var buttons = document.querySelectorAll("section[data-testid='stHorizontalBlock'] button");
+                    if(!buttons || buttons.length === 0) return false;
+                    for(var i=0;i<buttons.length;i++){{
+                        var b = buttons[i];
+                        var txt = (b.innerText || b.textContent || '').trim();
+                        if(!txt) continue;
+                        if(txt === lbl){{
+                            b.style.background = '#ffffff';
+                            var navText = getComputedStyle(document.documentElement).getPropertyValue('--nav-text') || '#0b0d10';
+                            b.style.color = navText.trim();
+                            b.style.border = '2px solid rgba(15,23,42,0.06)';
+                            b.style.borderRadius = '12px';
+                            b.style.boxShadow = '0 2px 6px rgba(0,0,0,0.04)';
+                            return true;
+                        }}
+                    }}
+                }} catch(e){{return false;}}
+                return false;
+            }}
+
+            function applyByIndex(){{
+                try {{
+                    var cols = document.querySelectorAll("section[data-testid='stHorizontalBlock'] > div > div");
+                    var idx = {active_idx} - 1;
+                    if(!cols || cols.length === 0) return false;
+                    var target = cols[idx];
+                    if(!target) return true;
+                    var btn = target.querySelector("button");
+                    if(!btn) return false;
+                    btn.style.background = '#ffffff';
+                    var navText = getComputedStyle(document.documentElement).getPropertyValue('--nav-text') || '#0b0d10';
+                    btn.style.color = navText.trim();
+                    btn.style.border = '2px solid rgba(15,23,42,0.06)';
+                    btn.style.borderRadius = '12px';
+                    btn.style.boxShadow = '0 2px 6px rgba(0,0,0,0.04)';
+                    return true;
+                }} catch(e){{return false;}}
+            }}
+
+            var tries = 0;
+            var t = setInterval(function(){{
+                var done = false;
+                // try label match first
+                if('{safe_label}') done = applyByLabel('{safe_label}');
+                // fallback to index
+                if(!done) done = applyByIndex();
+                if(done || ++tries > 40) clearInterval(t);
+            }}, 100);
+        }})();
+        </script>
+        """
+        st.markdown(js, unsafe_allow_html=True)
+
+    # Render each nav item as a Streamlit button so DOM is consistent and size doesn't change
+    for (label, key), col in zip(nav_items, cols[:-1]):
+        clicked = col.button(label, key=f"topnav_{key}", use_container_width=True)
+        if clicked:
+            st.session_state.page = key
+            safe_rerun()
+
+    # Right column intentionally left empty; mode control is under the Home tile.
+    mode_col = cols[-1]
+
+    # If the Home button is active, render the Mode radio beneath the first column
+    if current == 'home':
+        # Put the Mode control under the first column so layout is predictable
+        cols[0].markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
+        cols[0].radio(
+            "Mode",
+            options=['Lite', 'Pro'],
+            key="topnav_mode",
+            index=0 if st.session_state.get("mode", "Lite") == 'Lite' else 1,
+            on_change=_sidebar_mode_changed,
+            label_visibility='collapsed'
+        )
+
+
+
 # ---------- SIDEBAR ----------
 def render_sidebar():
     with st.sidebar:
         st.image("https://upload.wikimedia.org/wikipedia/commons/c/c8/FURECast_SPLG.png", width='stretch')
-        st.session_state.mode = st.radio(
-            "Select Mode:",
-            options=['Lite', 'Pro'],
-            key="sidebar_mode_radio",
-            help="Lite: Basic prediction + charts\nPro: Full LLM interface + all tools"
-        )
 
-        # Stacked navigation buttons: Home, Model Performance, Investment Glossary
-        st.markdown('<div style="display:flex; flex-direction:column; gap:6px;">', unsafe_allow_html=True)
-        if st.button("Home", key="sidebar_home", use_container_width=True):
-            st.session_state.page = "home"
-            safe_rerun()
-        if st.button("Model Performance Metrics", key="open_model_perf", use_container_width=True):
-            st.session_state.page = "performance"
-            safe_rerun()
-        if st.button("Investment Glossary", key="open_glossary", use_container_width=True):
-            st.session_state.page = "glossary"
-            safe_rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
+        current = st.session_state.get("page", "home")
 
-        st.sidebar.header("Chart Filters")
-        st.session_state.metric = st.selectbox(
-            "Select Price Metric",
-            options=["Closing", "Opening", "Daily High", "Daily Low", "Daily Current"],
-            index=["Closing", "Opening", "Daily High", "Daily Low", "Daily Current"].index(st.session_state.metric),
-            key="metric_selector"
-        )
+        if current in ("home", "performance"):
+            st.sidebar.header("Chart Filters")
+            st.session_state.metric = st.selectbox(
+                "Select Price Metric",
+                options=["Closing", "Opening", "Daily High", "Daily Low", "Daily Current"],
+                index=["Closing", "Opening", "Daily High", "Daily Low", "Daily Current"].index(st.session_state.metric),
+                key="metric_selector"
+            )
 
-        # (Removed) Show Event Highlights control was here
+            # Define the maximum available date from our dataset (last available date in historical data)
+            MAX_DATASET_DATE = pd.to_datetime(get_latest_date_in_dataset())
 
-        # Define the maximum available date from our dataset (last available date in historical data)
-        MAX_DATASET_DATE = pd.to_datetime(get_latest_date_in_dataset())
-    
-        # Convert Timestamp to date for comparison and display
-        current_end_date = st.session_state.end_date.date() if isinstance(st.session_state.end_date, pd.Timestamp) else st.session_state.end_date
-        current_start_date = st.session_state.start_date.date() if isinstance(st.session_state.start_date, pd.Timestamp) else st.session_state.start_date
-        
-        st.session_state.start_date = st.date_input(
-            "Start Date",
-            value=current_start_date,
-            key="start_date_selector",
-            max_value=MAX_DATASET_DATE.date()
-        )
-        st.session_state.end_date = st.date_input(
-            "End Date",
-            value=min(current_end_date, MAX_DATASET_DATE.date()),
-            key="end_date_selector",
-            max_value=MAX_DATASET_DATE.date()
-        )
-        
-        # Convert back to Timestamp for consistency
-        st.session_state.start_date = pd.to_datetime(st.session_state.start_date)
-        st.session_state.end_date = pd.to_datetime(st.session_state.end_date)
+            # Convert Timestamp to date for comparison and display
+            current_end_date = st.session_state.end_date.date() if isinstance(st.session_state.end_date, pd.Timestamp) else st.session_state.end_date
+            current_start_date = st.session_state.start_date.date() if isinstance(st.session_state.start_date, pd.Timestamp) else st.session_state.start_date
 
-        st.markdown("---")
-        st.markdown("### ℹ️ About FUREcast")
-        st.markdown("""
-        Demo showcasing SPLG ETF analysis with GradientBoostingRegressor and LLM orchestration.
-        All data and predictions are simulated.
-        """)
-        with st.expander("📊 Data Sources (Simulated)", expanded=False):
-            st.markdown("- SPLG historical data (2005-2025)\n- Sector ETF data\n- Technical indicators\n- Risk metrics")
-        with st.expander("🛠️ Architecture", expanded=False):
-            st.markdown("1. User Query\n2. LLM Router\n3. Tool Planner\n4. Tool Executor\n5. Answer Composer\n6. UI Renderer")
-        st.markdown('<div class="disclaimer">⚠️ <strong>Educational Only</strong><br>Not financial advice.</div>', unsafe_allow_html=True)
+            st.session_state.start_date = st.date_input(
+                "Start Date",
+                value=current_start_date,
+                key="start_date_selector",
+                max_value=MAX_DATASET_DATE.date()
+            )
+            st.session_state.end_date = st.date_input(
+                "End Date",
+                value=min(current_end_date, MAX_DATASET_DATE.date()),
+                key="end_date_selector",
+                max_value=MAX_DATASET_DATE.date()
+            )
+
+            # Convert back to Timestamp for consistency
+            st.session_state.start_date = pd.to_datetime(st.session_state.start_date)
+            st.session_state.end_date = pd.to_datetime(st.session_state.end_date)
+
+            st.markdown("---")
+            st.markdown("### ℹ️ About FUREcast")
+            st.markdown("""
+            Demo showcasing SPLG ETF analysis with GradientBoostingRegressor and LLM orchestration.
+            All data and predictions are simulated.
+            """)
+            with st.expander("Data Sources (Simulated)", expanded=False):
+                st.markdown("- SPLG historical data (2005-2025)\n- Sector ETF data\n- Technical indicators\n- Risk metrics")
+            with st.expander("Architecture", expanded=False):
+                st.markdown("1. User Query\n2. LLM Router\n3. Tool Planner\n4. Tool Executor\n5. Answer Composer\n6. UI Renderer")
+            st.markdown('<div class="disclaimer">⚠️ <strong>Educational Only</strong><br>Not financial advice.</div>', unsafe_allow_html=True)
+        else:
+            # Compact sidebar for Glossary or other pages where filters are not needed
+            st.markdown("### ℹ️ About FUREcast")
+            st.markdown("Demo view: sidebar filters hidden for this page.")
+            if st.button("Back to Dashboard", key="back_from_glossary_sidebar"):
+                st.session_state.page = "home"
+                safe_rerun()
 
 
 # ---------- LITE MODE ----------
@@ -284,7 +487,7 @@ def render_prediction_card(prediction):
 
 
 def render_feature_importance(features):
-    st.markdown("##### 🔍 Top Model Features")
+    st.markdown('<div class="chart-header">Top Model Features</div>', unsafe_allow_html=True)
     col1, col2 = st.columns([3,2])
     with col1:
         fig = create_feature_importance_chart(features)
@@ -311,7 +514,7 @@ def render_lite_mode():
         st.error(f"Error fetching news: {e}")
         articles = []
 
-    st.markdown("##### Latest Market Headlines", unsafe_allow_html=True)
+    st.markdown('<div class="chart-header">Latest Market Headlines</div>', unsafe_allow_html=True)
 
     if not articles or not isinstance(articles, list):
         st.warning("No recent S&P 500 news found.")
@@ -403,7 +606,7 @@ def render_lite_mode():
 
 
     # --- Display Combined Indicators ---
-    st.markdown("##### Macro & Sentiment Dashboard")
+    st.markdown('<div class="chart-header">Macro & Sentiment Dashboard</div>', unsafe_allow_html=True)
 
     # Use equal-width columns with a slightly larger gap and full-width panels
     col1, col2 = st.columns([1, 1], gap="large")
@@ -418,11 +621,17 @@ def render_lite_mode():
     with col1:
         # Show unemployment with status badge using computed color (stretches full column width)
         un_display = f"{unemployment_rate:.1f}%" if unemployment_rate is not None else "N/A"
+        # stronger, explicit dark text for visibility in Streamlit dark theme
+        panel_style_lite = (
+            "padding:14px; border-radius:12px; "
+            "background:linear-gradient(180deg,#fbfdff,#f1f6fb); "
+            "border:1px solid rgba(15,23,42,0.06); width:100%; box-sizing:border-box; color:#0b0d10;"
+        )
         st.markdown(
-            f"<div style='{panel_style}'>"
-            f"<div style='font-size:1.0rem; font-weight:600;'>Unemployment Rate</div>"
-            f"<div style='font-size:1.6rem; margin-top:6px;'>{un_display}</div>"
-            f"<div style='margin-top:8px; color:{un_color}; font-weight:700;'>{un_status}</div>"
+            f"<div style='{panel_style_lite}'>"
+            f"<div style='font-size:1.0rem; font-weight:700; color:#0b0d10; opacity:0.95;'>Unemployment Rate</div>"
+            f"<div style='font-size:1.6rem; margin-top:6px; color:#0b0d10; font-weight:800;'>{un_display}</div>"
+            f"<div style='margin-top:10px; color:{un_color}; font-weight:800;'>{un_status}</div>"
             f"</div>",
             unsafe_allow_html=True,
         )
@@ -431,10 +640,10 @@ def render_lite_mode():
         # Show public debt with status badge using computed color (stretches full column width)
         debt_display = f"{public_debt_pct:.1f}%" if public_debt_pct is not None else "N/A"
         st.markdown(
-            f"<div style='{panel_style}'>"
-            f"<div style='font-size:1.0rem; font-weight:600;'>Public Debt (% of GDP)</div>"
-            f"<div style='font-size:1.6rem; margin-top:6px;'>{debt_display}</div>"
-            f"<div style='margin-top:8px; color:{debt_color}; font-weight:700;'>{debt_status}</div>"
+            f"<div style='{panel_style_lite}'>"
+            f"<div style='font-size:1.0rem; font-weight:700; color:#0b0d10; opacity:0.95;'>Public Debt (% of GDP)</div>"
+            f"<div style='font-size:1.6rem; margin-top:6px; color:#0b0d10; font-weight:800;'>{debt_display}</div>"
+            f"<div style='margin-top:10px; color:{debt_color}; font-weight:800;'>{debt_status}</div>"
             f"</div>",
             unsafe_allow_html=True,
         )
@@ -446,11 +655,13 @@ def render_lite_mode():
     [data-testid="stMetricLabel"] {color: #1c1c1c;}
     </style>
     """, unsafe_allow_html=True)
+    # Divider after Macro & Sentiment Dashboard to separate from core UI
+    st.markdown("---")
     # =============================
     # 📈 Core UI: Header + Prediction
     # =============================
-    st.markdown('<p class="main-header">📈 FUREcast SPLG Predictor</p>', unsafe_allow_html=True)
-    st.markdown('<p class="sub-header">Educational GBR-Based Market Analytics</p>', unsafe_allow_html=True)
+    st.markdown('<div class="chart-header">FUREcast SPLG Predictor</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-header">Educational GBR-Based Market Analytics</div>', unsafe_allow_html=True)
 
     # --- Run model prediction ---
     if st.session_state.prediction_cache is None:
@@ -477,7 +688,7 @@ def render_lite_mode():
     max_date = st.session_state.max_dataset_date
 
     if start_date > end_date:
-        st.error("🚫 Start date must be before end date.")
+        st.error("Start date must be before end date.")
         st.stop()
         
     # Ensure end date doesn't exceed dataset limit for price charts
@@ -485,7 +696,7 @@ def render_lite_mode():
         end_date = max_date
         st.warning(f"⚠️ End date adjusted to maximum available date: {max_date.date()}")
 
-    st.markdown(f"##### 📊 {metric} Price Chart")
+    st.markdown(f"<div class=\"chart-header\">{metric} Price Chart</div>", unsafe_allow_html=True)
     with st.spinner("Loading chart..."):
         try:
             # Map display name to DataFrame column name
@@ -523,7 +734,7 @@ def render_pro_mode():
         st.error(f"Error fetching news: {e}")
         articles = []
 
-    st.markdown("##### Latest Market Headlines", unsafe_allow_html=True)
+    st.markdown('<div class="chart-header">Latest Market Headlines</div>', unsafe_allow_html=True)
 
     if not articles or not isinstance(articles, list):
         st.warning("No recent S&P 500 news found.")
@@ -599,19 +810,70 @@ def render_pro_mode():
             public_debt_pct = float(data_debt[0].get("value", 0)) if data_debt else None
         except Exception:
             public_debt_pct = None
-    # ...existing code...
+    # =============================
+    # 📊 Macro & Sentiment Dashboard (Pro Mode)
+    # Render two summary tiles with explicit dark text so they are readable in Streamlit dark theme
+    # =============================
+
+    # Helper to compute status + color (same thresholds as Lite mode)
+    def indicator_status(value, good_max):
+        if value is None:
+            return "N/A", "grey"
+        if value <= good_max:
+            return "Acceptable", "#0b8a3e"
+        else:
+            return "Bad", "#d62828"
+
+    un_status, un_color = indicator_status(unemployment_rate, 6.0)
+    debt_status, debt_color = indicator_status(public_debt_pct, 70.0)
+
+    st.markdown('<div class="chart-header">Macro & Sentiment Dashboard</div>', unsafe_allow_html=True)
+
+    col1, col2 = st.columns([1, 1], gap="large")
+
+    # Panel style uses a light background with explicit dark text color to ensure readability
+    panel_style = (
+        "padding:14px; border-radius:12px; "
+        "background:linear-gradient(180deg,#fbfdff,#f1f6fb); "
+        "border:1px solid rgba(15,23,42,0.06); width:100%; box-sizing:border-box; color:#0b0d10;"
+    )
+
+    with col1:
+        un_display = f"{unemployment_rate:.1f}%" if unemployment_rate is not None else "N/A"
+        st.markdown(
+            f"<div style='{panel_style}'>"
+            f"<div style='font-size:1.0rem; font-weight:700; color:#0b0d10; opacity:0.95;'>Unemployment Rate</div>"
+            f"<div style='font-size:1.8rem; margin-top:8px; color:#0b0d10; font-weight:800;'>{un_display}</div>"
+            f"<div style='margin-top:10px; color:{un_color}; font-weight:800;'>{un_status}</div>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+    with col2:
+        debt_display = f"{public_debt_pct:.1f}%" if public_debt_pct is not None else "N/A"
+        st.markdown(
+            f"<div style='{panel_style}'>"
+            f"<div style='font-size:1.0rem; font-weight:700; color:#0b0d10; opacity:0.95;'>Public Debt (% of GDP)</div>"
+            f"<div style='font-size:1.8rem; margin-top:8px; color:#0b0d10; font-weight:800;'>{debt_display}</div>"
+            f"<div style='margin-top:10px; color:{debt_color}; font-weight:800;'>{debt_status}</div>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+    # Divider after Macro & Sentiment Dashboard to separate from core UI
+    st.markdown("---")
 
     # =============================
     # 📈 Core UI: Header + Prediction
     # =============================
-    st.markdown('<p class="main-header">🚀 FUREcast Pro Analytics</p>', unsafe_allow_html=True)
-    st.markdown('<p class="sub-header">AI-Powered Investment Insights & Natural Language Interface</p>', unsafe_allow_html=True)
+    st.markdown('<div class="chart-header">FUREcast Pro Analytics</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-header">AI-Powered Investment Insights & Natural Language Interface</div>', unsafe_allow_html=True)
     
     # Get max dataset date for use throughout Pro mode
     max_dataset_date = st.session_state.max_dataset_date
     
     # Quick prediction card (collapsible)
-    with st.expander("📈 Current SPLG Prediction", expanded=True):
+    with st.expander("Current SPLG Prediction", expanded=True):
         if st.session_state.prediction_cache is None:
             with st.spinner("Generating prediction..."):
                 st.session_state.prediction_cache = predict_splg()
@@ -651,11 +913,11 @@ def render_pro_mode():
     st.markdown("---")
     
     # Natural language query interface
-    st.markdown("### 💬 Ask FUREcast")
-    st.markdown("*Enter your question about SPLG, sectors, risk, or market trends...*")
+    st.markdown('<div class="chart-header">**💬 Ask FUREcast**</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-header">Enter your question about SPLG, sectors, risk, or market trends...</div>', unsafe_allow_html=True)
     
     # Example queries
-    with st.expander("💡 Example Queries"):
+    with st.expander("Example Queries"):
         examples = [
             "Is now a good time to invest in SPLG?",
             "Which sectors look stable this quarter?",
@@ -682,7 +944,7 @@ def render_pro_mode():
     
     col1, col2 = st.columns([1, 5])
     with col1:
-        submit = st.button("🔍 Analyze", type="primary", use_container_width=True, key="analyze_button")
+        submit = st.button("Analyze", type="primary", use_container_width=True, key="analyze_button")
     with col2:
         if st.button("Clear", use_container_width=True, key="clear_button"):
             st.session_state.last_query = ""
@@ -697,7 +959,7 @@ def render_pro_mode():
         st.session_state.execute_query = False
         st.session_state.last_query = query
         
-        with st.spinner("🤔 Planning analysis..."):
+        with st.spinner("Planning analysis..."):
             # Route query
             plan = route_query(query)
         
@@ -708,7 +970,7 @@ def render_pro_mode():
             st.json(plan)
         
         # Execute tools based on plan
-        with st.spinner("📊 Executing analysis..."):
+        with st.spinner("Executing analysis..."):
             tool_results = {}
             intent = plan.get('intent', 'general_question')
             
@@ -734,13 +996,13 @@ def render_pro_mode():
             response = compose_answer(query, tool_results, plan)
         
         # Display results
-        st.markdown("### 📝 Analysis Results")
+        st.markdown('<div class="chart-header">Analysis Results</div>', unsafe_allow_html=True)
         st.markdown(response)
         
         st.markdown("---")
         
         # Generate visualizations based on intent
-        st.markdown("### 📊 Visualizations")
+        st.markdown('<div class="chart-header">Visualizations</div>', unsafe_allow_html=True)
         
         viz_plan = plan.get('visualization') or {}
         viz_type = viz_plan.get('type', 'price')
@@ -760,7 +1022,7 @@ def render_pro_mode():
             # Show summary table
             summary_df = get_sector_summary()
             if not summary_df.empty:
-                with st.expander("📊 Sector Summary Table", expanded=False):
+                with st.expander("Sector Summary Table", expanded=False):
                     st.dataframe(summary_df, width='stretch', hide_index=True)
         
         elif 'sector' in query.lower() and 'risk' in query.lower():
@@ -788,7 +1050,7 @@ def render_pro_mode():
     
     # Additional tools section - MOVED OUTSIDE the conditional logic
     st.markdown("---")
-    st.markdown("### 📊 Advanced Sector Analytics")
+    st.markdown('<div class="chart-header">Advanced Sector Analytics</div>', unsafe_allow_html=True)
     
     tab1, tab2, tab3, tab4 = st.tabs(["Sector Risk", "Holdings Detail", "Price Trends", "Feature Analysis"])
 
@@ -844,6 +1106,8 @@ def render_pro_mode():
 # ---------- MAIN ----------
 def main():
     initialize_session_state()
+    # Top navigation sits above the main content (e.g., above Latest Market Headlines)
+    render_top_nav()
     render_sidebar()
 
     # Simple page routing
@@ -883,7 +1147,7 @@ def render_performance_page():
     """
     import inspect
 
-    st.markdown('<p class="main-header">📈 Model Performance Metrics</p>', unsafe_allow_html=True)
+    st.markdown('<p class="main-header">Model Performance Metrics</p>', unsafe_allow_html=True)
     st.markdown("Select a plot tab to view model performance plots.")
 
     items = []  # list of (label, fig_or_path)
