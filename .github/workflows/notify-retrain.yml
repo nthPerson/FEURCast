@@ -5,7 +5,15 @@ on:
   workflow_run:
     workflows: ["Daily Model Retrain"]
     types: [completed]
-  workflow_dispatch:  # Allow manual triggers
+  workflow_dispatch:
+    inputs:
+      simulated_status:
+        description: "Status to simulate (success|failure|cancelled)"
+        required: true
+        default: success
+      simulated_run_url:
+        description: "Optional run URL"
+        required: false
 
 jobs:
   notify:
@@ -15,15 +23,24 @@ jobs:
       - name: Prepare metadata
         id: meta
         run: |
-          echo "status=${{ github.event.workflow_run.conclusion }}" >> $GITHUB_OUTPUT
-          echo "run_url=${{ github.event.workflow_run.html_url }}" >> $GITHUB_OUTPUT
-          echo "run_id=${{ github.event.workflow_run.id }}" >> $GITHUB_OUTPUT
-          echo "run_number=${{ github.event.workflow_run.run_number }}" >> $GITHUB_OUTPUT
-          echo "started_at=${{ github.event.workflow_run.run_started_at }}" >> $GITHUB_OUTPUT
-          echo "updated_at=${{ github.event.workflow_run.updated_at }}" >> $GITHUB_OUTPUT
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "status=${{ github.event.inputs.simulated_status }}" >> $GITHUB_OUTPUT
+            echo "run_url=${{ github.event.inputs.simulated_run_url || 'ManualTrigger' }}" >> $GITHUB_OUTPUT
+            echo "run_id=manual" >> $GITHUB_OUTPUT
+            echo "run_number=manual" >> $GITHUB_OUTPUT
+            echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
+            echo "updated_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
+          else
+            echo "status=${{ github.event.workflow_run.conclusion }}" >> $GITHUB_OUTPUT
+            echo "run_url=${{ github.event.workflow_run.html_url }}" >> $GITHUB_OUTPUT
+            echo "run_id=${{ github.event.workflow_run.id }}" >> $GITHUB_OUTPUT
+            echo "run_number=${{ github.event.workflow_run.run_number }}" >> $GITHUB_OUTPUT
+            echo "started_at=${{ github.event.workflow_run.run_started_at }}" >> $GITHUB_OUTPUT
+            echo "updated_at=${{ github.event.workflow_run.updated_at }}" >> $GITHUB_OUTPUT
+          fi
 
       - name: Send success email
-        if: ${{ github.event.workflow_run.conclusion == 'success' }}
+        if: ${{ steps.meta.outputs.status == 'success' }}
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: ${{ secrets.SMTP_SERVER }}
@@ -42,7 +59,7 @@ jobs:
             Details: ${{ steps.meta.outputs.run_url }}
 
       - name: Send failure email
-        if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+        if: ${{ steps.meta.outputs.status == 'failure' }}
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: ${{ secrets.SMTP_SERVER }}
@@ -61,7 +78,7 @@ jobs:
             Inspect logs and artifacts: ${{ steps.meta.outputs.run_url }}
 
       - name: Send cancelled email
-        if: ${{ github.event.workflow_run.conclusion == 'cancelled' }}
+        if: ${{ steps.meta.outputs.status == 'cancelled' }}
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: ${{ secrets.SMTP_SERVER }}
@@ -78,6 +95,6 @@ jobs:
             Details: ${{ steps.meta.outputs.run_url }}
 
       - name: Fallback (echo only)
-        if: ${{ always() && (github.event.workflow_run.conclusion != 'success' && github.event.workflow_run.conclusion != 'failure' && github.event.workflow_run.conclusion != 'cancelled') }}
+        if: ${{ !contains(fromJSON('["success","failure","cancelled"]'), steps.meta.outputs.status) }}
         run: |
           echo "Run concluded with status: ${{ github.event.workflow_run.conclusion }}"
