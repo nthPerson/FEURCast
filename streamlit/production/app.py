@@ -1126,18 +1126,28 @@ def main():
         render_pro_mode()
 
     st.markdown("---")
-    st.markdown("""
+    # Footer: show demo/warning text only when using simulated model
+    is_simulated = False
+    try:
+        pred_cache = st.session_state.get('prediction_cache')
+        if isinstance(pred_cache, dict) and pred_cache.get('model_source') == 'simulated':
+            is_simulated = True
+    except Exception:
+        is_simulated = False
+
+    demo_suffix = " | Demo Version" if is_simulated else ""
+    warning_line = (
+        "<p style='font-size:0.8rem;'>⚠️ Model predictions simulated for demonstration purposes</p>"
+        if is_simulated else ""
+    )
+
+    st.markdown(f"""
     <div style='text-align:center; color:#666; padding:2rem;'>
         <p><strong>FUREcast GBR Demo</strong> | Educational Analytics Platform</p>
-        <p style='font-size:0.9rem;'>Built with Streamlit, OpenAI, and Plotly | Demo Version</p>
-        <p style='font-size:0.8rem;'>⚠️ All data simulated for demonstration purposes</p>
+        <p style='font-size:0.9rem;'>Built with Streamlit, OpenAI, and Plotly{demo_suffix}</p>
+        {warning_line}
     </div>
     """, unsafe_allow_html=True)
-
-
-# --- remove or comment out any earlier immediate call to main() so functions defined later are available ---
-# if __name__ == "__main__":
-#     main()
 
 def render_performance_page():
     """
