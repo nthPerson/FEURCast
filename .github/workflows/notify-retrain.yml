@@ -5,6 +5,7 @@ on:
   workflow_run:
     workflows: ["Daily Model Retrain"]
     types: [completed]
+  workflow_dispatch:  # Allow manual triggers
 
 jobs:
   notify:
