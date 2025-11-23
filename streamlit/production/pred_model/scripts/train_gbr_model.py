@@ -21,6 +21,7 @@ import argparse
 from datetime import datetime
 from pathlib import Path
 import sys
+from typing import Dict
 
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.model_selection import train_test_split, TimeSeriesSplit, GridSearchCV
@@ -353,6 +354,72 @@ def load_optimal_hyperparameters():
         return None
 
 
+def smape(y_true, y_pred, epsilon=1e-10):
+    return 100 * np.mean(2 * np.abs(y_pred - y_true) / (np.abs(y_true) + np.abs(y_pred) + epsilon))
+
+def compute_baselines(y_train, y_val, y_test):
+    """Naive baselines: previous day (lag-1), zero, mean."""
+    def metrics(y_true, y_pred):
+        mse = mean_squared_error(y_true, y_pred)
+        rmse = np.sqrt(mse)
+        mae = mean_absolute_error(y_true, y_pred)
+        r2 = r2_score(y_true, y_pred)
+        s_mape = smape(y_true, y_pred)
+        dir_acc = np.mean(np.sign(y_true) == np.sign(y_pred))
+        return dict(mse=mse, rmse=rmse, mae=mae, r2=r2, smape=s_mape, directional_accuracy=dir_acc)
+    # Lag baseline (cannot predict first item ⇒ drop first sample for fair comparison)
+    lag_train_pred = y_train.shift(1).fillna(0)
+    lag_val_pred = y_val.shift(1).fillna(y_train.iloc[-1])
+    lag_test_pred = y_test.shift(1).fillna(y_val.iloc[-1])
+    zero_train = np.zeros_like(y_train)
+    zero_val = np.zeros_like(y_val)
+    zero_test = np.zeros_like(y_test)
+    mean_val = np.full_like(y_val, y_train.mean())
+    mean_test = np.full_like(y_test, y_train.mean())
+    baselines = {
+        'lag': {
+            'train': metrics(y_train[1:], lag_train_pred[1:]),
+            'val': metrics(y_val, lag_val_pred),
+            'test': metrics(y_test, lag_test_pred)
+        },
+        'zero': {
+            'val': metrics(y_val, zero_val),
+            'test': metrics(y_test, zero_test)
+        },
+        'mean': {
+            'val': metrics(y_val, mean_val),
+            'test': metrics(y_test, mean_test)
+        }
+    }
+    return baselines
+
+def evaluate_model(model, X, y, set_name=""):
+    """Extended evaluation (adds sMAPE; suppress unusable MAPE)."""
+    y_pred = model.predict(X)
+    mse = mean_squared_error(y, y_pred)
+    rmse = np.sqrt(mse)
+    mae = mean_absolute_error(y, y_pred)
+    r2 = r2_score(y, y_pred)
+    s_mape = smape(y, y_pred)
+    directional_accuracy = np.mean(np.sign(y) == np.sign(y_pred))
+    logger.info(f"\n{set_name} Set Performance:")
+    logger.info(f"  MSE:   {mse:.8f}")
+    logger.info(f"  RMSE:  {rmse:.6f}")
+    logger.info(f"  MAE:   {mae:.6f}")
+    logger.info(f"  R²:    {r2:.6f}")
+    logger.info(f"  sMAPE: {s_mape:.2f}%")
+    logger.info(f"  Directional Accuracy: {directional_accuracy:.2%}")
+    return {
+        'mse': float(mse),
+        'rmse': float(rmse),
+        'mae': float(mae),
+        'r2': float(r2),
+        'smape': float(s_mape),
+        'directional_accuracy': float(directional_accuracy),
+        'predictions': y_pred.tolist() if len(y_pred) < 10000 else None
+    }
+
+
 def train_tuned_model(X_train, y_train, quick=True):
     """
     Train GBR model with recommended or tuned hyperparameters.
@@ -366,65 +433,44 @@ def train_tuned_model(X_train, y_train, quick=True):
         GradientBoostingRegressor: Trained model
     """
     if quick:
-        logger.info("Training in quick mode...")
-        
-        # Try to load previously tuned hyperparameters
+        logger.info("Training in quick mode with enhanced defaults...")
         optimal_params = load_optimal_hyperparameters()
-        
         if optimal_params:
-            logger.info("Using previously discovered optimal hyperparameters")
-            gbr = GradientBoostingRegressor(
-                n_estimators=optimal_params['n_estimators'],
-                learning_rate=optimal_params['learning_rate'],
-                max_depth=optimal_params['max_depth'],
-                min_samples_split=optimal_params['min_samples_split'],
-                min_samples_leaf=optimal_params['min_samples_leaf'],
-                subsample=optimal_params['subsample'],
-                max_features=optimal_params['max_features'],
-                random_state=RANDOM_SEED,
-                verbose=1,
-                validation_fraction=0.1,
-                n_iter_no_change=20
-            )
+            base_params = optimal_params
         else:
-            logger.info("Using default recommended hyperparameters")
-            gbr = GradientBoostingRegressor(
-                n_estimators=300,
-                learning_rate=0.05,
-                max_depth=4,
-                min_samples_split=10,
-                min_samples_leaf=4,
-                subsample=0.8,
-                max_features='sqrt',
-                random_state=RANDOM_SEED,
-                verbose=1,
-                validation_fraction=0.1,
-                n_iter_no_change=20
-            )
-        
+            base_params = {
+                'n_estimators': 1200,
+                'learning_rate': 0.01,
+                'max_depth': 5,
+                'min_samples_split': 10,
+                'min_samples_leaf': 7,
+                'subsample': 0.7,
+                'max_features': 'sqrt'
+            }
+        gbr = GradientBoostingRegressor(
+            **base_params,
+            random_state=RANDOM_SEED,
+            verbose=1,
+            validation_fraction=0.1,
+            n_iter_no_change=50,
+            tol=1e-4
+        )
         gbr.fit(X_train, y_train)
-        logger.info("Quick training complete")
-        
+        logger.info("Enhanced quick training complete")
         return gbr
-    
     else:
-        logger.info("Performing GridSearch hyperparameter tuning (this may take a while)...")
-        
+        logger.info("Expanded GridSearch with TimeSeriesSplit...")
         param_grid = {
-            'n_estimators': [100, 200, 300],
-            'learning_rate': [0.01, 0.05, 0.1],
-            'max_depth': [3, 4, 5],
-            'min_samples_split': [5, 10],
-            'min_samples_leaf': [2, 4],
-            'subsample': [0.8, 0.9],
+            'n_estimators': [600, 900, 1200],
+            'learning_rate': [0.01, 0.02, 0.03],
+            'max_depth': [4, 5, 6],
+            'min_samples_split': [10, 20],
+            'min_samples_leaf': [3, 5, 8],
+            'subsample': [0.6, 0.7, 0.8],
             'max_features': ['sqrt', 'log2']
         }
-        
-        # Use TimeSeriesSplit for proper temporal cross-validation
         tscv = TimeSeriesSplit(n_splits=5)
-        
         gbr = GradientBoostingRegressor(random_state=RANDOM_SEED)
-        
         grid_search = GridSearchCV(
             estimator=gbr,
             param_grid=param_grid,
@@ -447,54 +493,6 @@ def train_tuned_model(X_train, y_train, quick=True):
         logger.info(f"{'='*60}\n")
         
         return grid_search.best_estimator_
-
-
-def evaluate_model(model, X, y, set_name=""):
-    """
-    Evaluate model performance with multiple metrics.
-    
-    Args:
-        model: Trained model
-        X: Features
-        y: Target
-        set_name: Name of dataset (Train/Val/Test)
-    
-    Returns:
-        dict: Performance metrics
-    """
-    y_pred = model.predict(X)
-    
-    # Regression metrics
-    mse = mean_squared_error(y, y_pred)
-    rmse = np.sqrt(mse)
-    mae = mean_absolute_error(y, y_pred)
-    r2 = r2_score(y, y_pred)
-    
-    # Mean Absolute Percentage Error (with handling for zero values)
-    epsilon = 1e-10
-    mape = np.mean(np.abs((y - y_pred) / (y + epsilon))) * 100
-    
-    # Financial metric: Directional accuracy
-    directional_accuracy = np.mean((np.sign(y) == np.sign(y_pred)))
-    
-    # Log metrics
-    logger.info(f"\n{set_name} Set Performance:")
-    logger.info(f"  MSE:  {mse:.8f}")
-    logger.info(f"  RMSE: {rmse:.6f}")
-    logger.info(f"  MAE:  {mae:.6f}")
-    logger.info(f"  R²:   {r2:.6f}")
-    logger.info(f"  MAPE: {mape:.2f}%")
-    logger.info(f"  Directional Accuracy: {directional_accuracy:.2%}")
-    
-    return {
-        'mse': float(mse),
-        'rmse': float(rmse),
-        'mae': float(mae),
-        'r2': float(r2),
-        'mape': float(mape),
-        'directional_accuracy': float(directional_accuracy),
-        'predictions': y_pred.tolist() if len(y_pred) < 10000 else None  # Don't store huge arrays
-    }
 
 
 def save_model_artifacts(model, scaler, feature_names, metrics, model_name="gbr_model"):
@@ -547,7 +545,11 @@ def save_model_artifacts(model, scaler, feature_names, metrics, model_name="gbr_
         'version': timestamp,
         'training_date': datetime.now().isoformat(),
         'n_features': len(feature_names),
-        'hyperparameters': model.get_params(),
+        'hyperparameters': {
+            k: v for k, v in model.get_params().items()
+            if k in ['n_estimators','learning_rate','max_depth','min_samples_split','min_samples_leaf',
+                     'subsample','max_features','validation_fraction','n_iter_no_change','tol','random_state']
+        },
         'random_seed': RANDOM_SEED,
         'data_path': str(DATA_PATH),
         'performance_metrics': metrics
@@ -600,12 +602,12 @@ def main():
         train_metrics = evaluate_model(model, X_train_scaled, y_train, "Training")
         val_metrics = evaluate_model(model, X_val_scaled, y_val, "Validation")
         test_metrics = evaluate_model(model, X_test_scaled, y_test, "Test")
-        
-        # Compile all metrics
+        baselines = compute_baselines(y_train, y_val, y_test)
         all_metrics = {
             'train': train_metrics,
             'validation': val_metrics,
             'test': test_metrics,
+            'baselines': baselines,
             'training_info': {
                 'n_train_samples': len(X_train),
                 'n_val_samples': len(X_val),
