@@ -137,24 +137,96 @@ st.set_page_config(
 # Custom CSS
 st.markdown("""
 <style>
-    .main-header { font-size: 2.5rem; font-weight: bold; color: #2E86AB; margin-bottom: 0.5rem; }
-    .sub-header { font-size: 1.2rem; color: #666; margin-bottom: 2rem; }
-    /* Chart-style header: match the visual of 'Latest Market Headlines' */
-    /* Prominent chart/section headers used across Lite & Pro
-       - Light mode: black text
-       - Dark mode: white text and 1.5x font size for emphasis */
-    .chart-header { font-size: 1.20rem; font-weight: 800; color: #0b0d10; margin: 0.6rem 0; }
-    /* Streamlit sets theme on the <html> element via data-theme attribute */
-    html[data-theme='dark'] .chart-header {
-        color: #ffffff !important;
-        font-size: calc(1.20rem * 1.5) !important;
-        font-weight: 800 !important;
+    /* Primary headers */
+    .main-header, p.main-header { font-size: 2.5rem; font-weight: bold; color: #2E86AB; margin-bottom: 0.5rem; }
+    .sub-header, p.sub-header { font-size: 1.2rem; color: #666; margin-bottom: 2rem; }
+    /* Chart-style header - ensure block-level and stacking so it remains visible above nearby panels */
+    .chart-header, p.chart-header, div.chart-header { font-size: 1.20rem; font-weight: 800; margin: 0.6rem 0; display:block; position:relative; z-index:50; }
+
+    /* Provide theme-aware CSS variables for nav and header colors so other rules can reuse them */
+    html[data-theme='dark'], body[data-theme='dark'] {
+        --app-text-primary: #ffffff;
+        --app-text-on-surface: #e6eef6;
+        --nav-bg: #0f1720;
+        --nav-text: #ffffff;
+        --nav-border: rgba(255,255,255,0.06);
     }
-    html[data-theme='light'] .chart-header {
-        color: #0b0d10 !important;
-        font-size: 1.20rem !important;
-        font-weight: 800 !important;
+    html[data-theme='light'], body[data-theme='light'] {
+        --app-text-primary: #0b0d10;
+        --app-text-on-surface: #1c1c1c;
+        --nav-bg: #f6f8fb;
+        --nav-text: #0b0d10;
+        --nav-border: rgba(15,23,42,0.06);
     }
+
+    /* Apply theme-aware colors to headers using the variables above */
+    html[data-theme='dark'] .chart-header,
+    body[data-theme='dark'] .chart-header,
+    html[data-theme='dark'] p.chart-header,
+    body[data-theme='dark'] p.chart-header,
+    html[data-theme='dark'] .main-header,
+    body[data-theme='dark'] .main-header,
+    html[data-theme='dark'] p.main-header,
+    body[data-theme='dark'] p.main-header,
+    html[data-theme='dark'] .sub-header,
+    body[data-theme='dark'] .sub-header,
+    html[data-theme='dark'] p.sub-header,
+    body[data-theme='dark'] p.sub-header {
+        color: var(--app-text-primary) !important;
+    }
+
+    html[data-theme='light'] .chart-header,
+    body[data-theme='light'] .chart-header,
+    html[data-theme='light'] p.chart-header,
+    body[data-theme='light'] p.chart-header,
+    html[data-theme='light'] .main-header,
+    body[data-theme='light'] .main-header,
+    html[data-theme='light'] p.main-header,
+    body[data-theme='light'] p.main-header,
+    html[data-theme='light'] .sub-header,
+    body[data-theme='light'] .sub-header,
+    html[data-theme='light'] p.sub-header,
+    body[data-theme='light'] p.sub-header {
+        color: var(--app-text-primary) !important;
+    }
+
+    /* Make nav tiles respond to theme variables so they remain readable */
+    :root { --nav-bg: #f6f8fb; --nav-text: #0b0d10; --nav-border: rgba(15,23,42,0.06); }
+    section[data-testid='stHorizontalBlock'] > div div button,
+    .nav-tile {
+        background: var(--nav-bg) !important;
+        color: var(--nav-text) !important;
+        border-radius: 10px !important;
+        padding: 0 18px !important;
+        font-weight: 700 !important;
+        font-size: 15px !important;
+        border: 2px solid var(--nav-border) !important;
+        text-align: center !important;
+        cursor: pointer !important;
+        display: block !important;
+        align-items: center !important;
+        justify-content: center !important;
+        width: 100% !important;
+        height: 56px !important;
+        line-height: 1.1 !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        box-sizing: border-box !important;
+    }
+
+    /* Hover and active states (keep small shadow) */
+    section[data-testid='stHorizontalBlock'] > div div button:hover,
+    .nav-tile:hover { box-shadow: 0 2px 6px rgba(0,0,0,0.04) !important; }
+
+    .nav-active,
+    section[data-testid='stHorizontalBlock'] > div div button.nav-active {
+        background: var(--nav-bg) !important;
+        color: var(--nav-text) !important;
+        border: 2px solid var(--nav-border) !important;
+        box-shadow: none !important;
+    }
+
     .feature-item { display: flex; justify-content: space-between; padding: 0.5rem; border-bottom: 1px solid #eee; }
     .disclaimer { background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 1rem; border-radius: 4px; margin: 1rem 0; }
 </style>
@@ -913,7 +985,7 @@ def render_pro_mode():
     st.markdown("---")
     
     # Natural language query interface
-    st.markdown('<div class="chart-header">**💬 Ask FUREcast**</div>', unsafe_allow_html=True)
+    st.markdown('<div class="chart-header">💬 Ask FUREcast</div>', unsafe_allow_html=True)
     st.markdown('<div class="sub-header">Enter your question about SPLG, sectors, risk, or market trends...</div>', unsafe_allow_html=True)
     
     # Example queries
