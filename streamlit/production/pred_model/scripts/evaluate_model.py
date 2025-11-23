@@ -149,18 +149,15 @@ def load_and_prepare_data(feature_names):
 
 
 def plot_training_progress(model):
-    """Plot training loss curve."""
     logger.info("Generating training progress plot...")
-    
     train_score = model.train_score_
-    
-    plt.figure(figsize=(10, 6))
-    plt.plot(train_score, label='Training Loss', linewidth=2, color='#2E86AB')
+    plt.figure(figsize=(10,6))
+    plt.plot(train_score, label='Training Deviance (MSE)', linewidth=2, color='#2E86AB')
     plt.xlabel('Boosting Iteration', fontsize=12)
-    plt.ylabel('Loss (Negative MSE)', fontsize=12)
+    plt.ylabel('MSE (Deviance)', fontsize=12)
     plt.title('GBR Training Progress', fontsize=14, fontweight='bold')
-    plt.legend(fontsize=11)
-    plt.grid(True, alpha=0.3)
+    plt.legend()
+    plt.grid(alpha=0.3)
     
     plot_path = PLOTS_DIR / 'training_progress.png'
     plt.savefig(plot_path, dpi=300, bbox_inches='tight')
@@ -372,45 +369,32 @@ def plot_error_distribution(y_train, y_val, y_test,
     logger.info(f"Saved error distribution plot to {plot_path}")
 
 
+def compute_strategy_returns(y_true, y_pred):
+    """Long if pred>0 else short; strategy return = sign(pred)*y_true."""
+    return np.sign(y_pred) * y_true
+
 def calculate_financial_metrics(y_test, y_test_pred):
-    """Calculate additional financial performance metrics."""
-    logger.info("Calculating financial metrics...")
-    
-    # Sharpe Ratio (assuming 252 trading days, 2% risk-free rate)
-    returns = pd.Series(y_test_pred)
-    excess_return = returns.mean() * 252 - 0.02
-    volatility = returns.std() * np.sqrt(252)
+    logger.info("Calculating financial metrics (strategy on sign predictions)...")
+    strategy_returns = pd.Series(compute_strategy_returns(y_test.values, y_test_pred), index=y_test.index)
+    excess_return = strategy_returns.mean() * 252 - 0.02
+    volatility = strategy_returns.std() * np.sqrt(252)
     sharpe = excess_return / volatility if volatility > 0 else 0
-    
-    # Max Drawdown
-    cumulative = (1 + returns).cumprod()
-    running_max = cumulative.expanding().max()
-    drawdown = ((cumulative - running_max) / running_max)
+    cumulative = (1 + strategy_returns).cumprod()
+    running_max = cumulative.cummax()
+    drawdown = (cumulative - running_max) / running_max
     max_drawdown = drawdown.min()
-    
-    # Profit Factor (simple simulation)
-    wins = returns[returns > 0].sum()
-    losses = abs(returns[returns < 0].sum())
+    wins = strategy_returns[strategy_returns > 0].sum()
+    losses = -strategy_returns[strategy_returns < 0].sum()
     profit_factor = wins / losses if losses > 0 else np.inf
-    
-    # Win Rate
-    win_rate = (returns > 0).mean()
-    
-    financial_metrics = {
+    win_rate = (strategy_returns > 0).mean()
+    return {
         'sharpe_ratio': float(sharpe),
         'max_drawdown': float(max_drawdown),
         'profit_factor': float(profit_factor),
         'win_rate': float(win_rate),
-        'avg_win': float(returns[returns > 0].mean() if (returns > 0).any() else 0),
-        'avg_loss': float(returns[returns < 0].mean() if (returns < 0).any() else 0)
+        'avg_win': float(strategy_returns[strategy_returns > 0].mean() if (strategy_returns > 0).any() else 0),
+        'avg_loss': float(strategy_returns[strategy_returns < 0].mean() if (strategy_returns < 0).any() else 0)
     }
-    
-    logger.info(f"  Sharpe Ratio: {sharpe:.4f}")
-    logger.info(f"  Max Drawdown: {max_drawdown:.2%}")
-    logger.info(f"  Profit Factor: {profit_factor:.2f}")
-    logger.info(f"  Win Rate: {win_rate:.2%}")
-    
-    return financial_metrics
 
 
 def main():
