@@ -10,11 +10,12 @@ This script orchestrates the complete workflow:
 5. Log training results
 
 Usage:
-    python update_and_retrain.py [--force] [--quick]
+    python update_and_retrain.py [--force] [--quick] [--tune]
     
 Options:
-    --force: Force update and retrain even if no new data
-    --quick: Use quick training mode (20 estimators)
+    --force  Force update and retrain even if no new data
+    --quick  Use quick training mode (fast, no GridSearch)
+    --tune   Perform hyperparameter tuning (GridSearch)
 """
 
 import sys
@@ -40,12 +41,13 @@ def print_header(title: str) -> None:
     print("=" * 80 + "\n")
 
 
-def train_model(quick: bool = False) -> bool:
+def train_model(quick: bool = False, tune: bool = False) -> bool:
     """
     Run the model training script.
     
     Args:
         quick: If True, use quick training mode
+        tune: If True, perform hyperparameter tuning (overrides quick)
     
     Returns:
         True if training successful, False otherwise
@@ -56,13 +58,16 @@ def train_model(quick: bool = False) -> bool:
         # Build command
         script_path = MODULE_DIR / "scripts" / "train_gbr_model.py"
         cmd = [sys.executable, str(script_path)]
-        
-        if quick:
+
+        if tune:
+            cmd.append("--tune")
+            print("Using tuning mode (GridSearch)")
+        elif quick:
             cmd.append("--quick")
-            print("Using quick training mode (20 estimators)")
+            print("Using quick training mode (no GridSearch)")
         else:
-            print("Using full training mode (300 estimators)")
-        
+            print("Using default training mode (quick-enhanced defaults)")
+
         # Run training
         result = subprocess.run(cmd, capture_output=False, text=True)
         
@@ -75,6 +80,28 @@ def train_model(quick: bool = False) -> bool:
         
     except Exception as e:
         print(f"✗ Error during training: {e}")
+        return False
+
+
+def evaluate_model() -> bool:
+    """
+    Run the model evaluation script to generate plots and update metrics.
+    
+    Returns:
+        True if evaluation successful, False otherwise
+    """
+    print_header("STEP 4: Model Evaluation")
+    try:
+        script_path = MODULE_DIR / "scripts" / "evaluate_model.py"
+        cmd = [sys.executable, str(script_path)]
+        result = subprocess.run(cmd, capture_output=False, text=True)
+        if result.returncode != 0:
+            print(f"✗ Evaluation failed with exit code {result.returncode}")
+            return False
+        print("✓ Model evaluation complete")
+        return True
+    except Exception as e:
+        print(f"✗ Error during evaluation: {e}")
         return False
 
 
@@ -114,10 +141,9 @@ def load_model_metadata() -> dict:
 def main():
     """Main orchestration function"""
     parser = argparse.ArgumentParser(description='Update SPLG data and retrain model')
-    parser.add_argument('--force', action='store_true', 
-                       help='Force update and retrain even if no new data')
-    parser.add_argument('--quick', action='store_true',
-                       help='Use quick training mode (20 estimators)')
+    parser.add_argument('--force', action='store_true', help='Force update and retrain even if no new data')
+    parser.add_argument('--quick', action='store_true', help='Use quick training mode')
+    parser.add_argument('--tune', action='store_true', help='Perform hyperparameter tuning (GridSearch)')
     args = parser.parse_args()
     
     print("\n" + "=" * 80)
@@ -148,72 +174,66 @@ def main():
         return 1
     
     # STEP 3: Train model
-    train_success = train_model(quick=args.quick)
+    train_success = train_model(quick=args.quick, tune=args.tune)
     
     if not train_success:
         print("\n✗ Model training failed - aborting")
         return 1
-    
-    # STEP 4: Log results
-    print_header("STEP 4: Logging Results")
-    
+
+    # STEP 4: Evaluate model
+    eval_success = evaluate_model()
+    if not eval_success:
+        print("\n✗ Evaluation failed - aborting")
+        return 1
+
+    # STEP 5: Log results
+    print_header("STEP 5: Logging Results")
     try:
-        # Load metrics and metadata
-        metrics = load_training_metrics()
+        metrics = load_training_metrics()  # Reload after evaluation (financial metrics added)
         metadata = load_model_metadata()
-        
-        # Add update info to metadata
         metadata['update_info'] = {
             'had_new_data': has_updates,
             'forced_update': args.force,
             'quick_training': args.quick,
-            'new_records': len(new_data) if has_updates and new_data is not None else 0
+            'new_records': len(new_data) if has_updates and new_data is not None else 0,
+            'evaluation_completed': eval_success
         }
-        
-        # Log to training history
         log_training_results(metrics, metadata)
-        
         print("✓ Results logged successfully")
-        
     except Exception as e:
         print(f"⚠️  Warning: Could not log results: {e}")
-    
-    # STEP 5: Display summary
+
+    # STEP 6: Training Summary
     print_header("Training Summary")
-    
-    # Show latest results
     if metrics:
         test = metrics.get('test', {})
+        fin = metrics.get('financial_metrics', {})
         print(f"Test R²: {test.get('r2', 'N/A'):.4f}")
         print(f"Test RMSE: {test.get('rmse', 'N/A'):.6f}")
         print(f"Test MAE: {test.get('mae', 'N/A'):.6f}")
         print(f"Directional Accuracy: {test.get('directional_accuracy', 'N/A'):.2f}%")
-        
-        if 'sharpe_ratio' in test:
-            print(f"\nFinancial Metrics:")
-            print(f"  Sharpe Ratio: {test.get('sharpe_ratio', 'N/A'):.2f}")
-            print(f"  Max Drawdown: {test.get('max_drawdown', 'N/A'):.2f}%")
-            print(f"  Win Rate: {test.get('win_rate', 'N/A'):.2f}%")
-    
-    # Compare with previous
+        if fin:
+            print("\nFinancial Metrics:")
+            print(f"  Sharpe Ratio: {fin.get('sharpe_ratio', 0):.2f}")
+            print(f"  Max Drawdown: {fin.get('max_drawdown', 0):.2%}")
+            print(f"  Win Rate: {fin.get('win_rate', 0):.2%}")
+            print(f"  Profit Factor: {fin.get('profit_factor', 0):.2f}")
+
     changes = compare_with_previous()
     if changes:
         print(f"\nChange from Previous Training:")
         print(f"  R² change: {changes['r2_change']:+.4f}")
         print(f"  RMSE change: {changes['rmse_change']:+.6f}")
         print(f"  Directional Accuracy change: {changes['directional_accuracy_change']:+.2f}%")
-    
-    # Final summary
+
     print("\n" + "=" * 80)
-    print("  ✓ Update and Retrain Complete")
+    print("  ✓ Update, Retrain, and Evaluate Complete")
     print("=" * 80 + "\n")
-    
     print("Next steps:")
     print("  • Restart Streamlit app to use updated model")
     print("  • View training history: python training_logger.py")
     print("  • Check plots: ls -lh plots/")
     print("  • View logs: ls -lh logs/\n")
-    
     return 0
 
 
