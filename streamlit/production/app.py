@@ -9,6 +9,7 @@ import sys
 import os
 import io
 import pandas as pd
+import html
 
 # Safe rerun helper to support Streamlit versions where experimental_rerun / rerun may be missing
 def safe_rerun():
@@ -229,6 +230,27 @@ st.markdown("""
 
     .feature-item { display: flex; justify-content: space-between; padding: 0.5rem; border-bottom: 1px solid #eee; }
     .disclaimer { background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 1rem; border-radius: 4px; margin: 1rem 0; }
+</style>
+""", unsafe_allow_html=True)
+
+# Helper to render a chart/header with an info icon that shows a native browser tooltip on hover
+def header_with_info(text: str, tooltip: str = None):
+    if tooltip:
+        tip = html.escape(tooltip, quote=True)
+        # small circled info icon; title attribute provides the hover tooltip
+        st.markdown(f'<div class="chart-header">{text} <span class="info-icon" title="{tip}">ⓘ</span></div>', unsafe_allow_html=True)
+    else:
+        st.markdown(f'<div class="chart-header">{text}</div>', unsafe_allow_html=True)
+
+# Minimal style for the info icon (uses theme variables defined earlier)
+st.markdown("""
+<style>
+    .info-icon {
+        font-size:0.95rem; margin-left:8px; padding:2px 6px; border-radius:12px; cursor:help; vertical-align:middle;
+        background: transparent; color: var(--app-text-primary, #0b0d10); border: 1px solid rgba(0,0,0,0.08);
+    }
+    html[data-theme='dark'] .info-icon, body[data-theme='dark'] .info-icon { color: var(--app-text-primary); border-color: rgba(255,255,255,0.08); }
+    html[data-theme='light'] .info-icon, body[data-theme='light'] .info-icon { color: var(--app-text-primary); border-color: rgba(0,0,0,0.06); }
 </style>
 """, unsafe_allow_html=True)
 
@@ -559,7 +581,7 @@ def render_prediction_card(prediction):
 
 
 def render_feature_importance(features):
-    st.markdown('<div class="chart-header">Top Model Features</div>', unsafe_allow_html=True)
+    header_with_info('Top Model Features', 'Shows the model\'s top features and their relative importance in the current prediction — educational, not causal.')
     col1, col2 = st.columns([3,2])
     with col1:
         fig = create_feature_importance_chart(features)
@@ -586,7 +608,7 @@ def render_lite_mode():
         st.error(f"Error fetching news: {e}")
         articles = []
 
-    st.markdown('<div class="chart-header">Latest Market Headlines</div>', unsafe_allow_html=True)
+    header_with_info('Latest Market Headlines', 'Curated market headlines. Sentiment classification is heuristic and provided for educational context only.')
 
     if not articles or not isinstance(articles, list):
         st.warning("No recent S&P 500 news found.")
@@ -678,7 +700,7 @@ def render_lite_mode():
 
 
     # --- Display Combined Indicators ---
-    st.markdown('<div class="chart-header">Macro & Sentiment Dashboard</div>', unsafe_allow_html=True)
+    header_with_info('Macro & Sentiment Dashboard', 'High-level macro indicators (e.g., unemployment, public debt) combined with simple sentiment cues. Thresholds and colors are illustrative for teaching purposes.')
 
     # Use equal-width columns with a slightly larger gap and full-width panels
     col1, col2 = st.columns([1, 1], gap="large")
@@ -732,7 +754,7 @@ def render_lite_mode():
     # =============================
     # 📈 Core UI: Header + Prediction
     # =============================
-    st.markdown('<div class="chart-header">FUREcast SPLG Predictor</div>', unsafe_allow_html=True)
+    header_with_info('FUREcast SPLG Predictor', 'Model prediction from a Gradient Boosting Regressor trained on historical features. Predictions are illustrative and not financial advice.')
     st.markdown('<div class="sub-header">Educational GBR-Based Market Analytics</div>', unsafe_allow_html=True)
 
     # --- Run model prediction ---
@@ -768,7 +790,7 @@ def render_lite_mode():
         end_date = max_date
         st.warning(f"⚠️ End date adjusted to maximum available date: {max_date.date()}")
 
-    st.markdown(f"<div class=\"chart-header\">{metric} Price Chart</div>", unsafe_allow_html=True)
+    header_with_info(f"{metric} Price Chart", 'Interactive historical price chart for the selected metric. Use the date selectors to adjust the displayed range.')
     with st.spinner("Loading chart..."):
         try:
             # Map display name to DataFrame column name
@@ -806,7 +828,7 @@ def render_pro_mode():
         st.error(f"Error fetching news: {e}")
         articles = []
 
-    st.markdown('<div class="chart-header">Latest Market Headlines</div>', unsafe_allow_html=True)
+    header_with_info('Latest Market Headlines', 'Curated market headlines. Sentiment classification is heuristic and provided for educational context only.')
 
     if not articles or not isinstance(articles, list):
         st.warning("No recent S&P 500 news found.")
@@ -899,7 +921,7 @@ def render_pro_mode():
     un_status, un_color = indicator_status(unemployment_rate, 6.0)
     debt_status, debt_color = indicator_status(public_debt_pct, 70.0)
 
-    st.markdown('<div class="chart-header">Macro & Sentiment Dashboard</div>', unsafe_allow_html=True)
+    header_with_info('Macro & Sentiment Dashboard', 'High-level macro indicators (e.g., unemployment, public debt) combined with simple sentiment cues. Thresholds and colors are illustrative for teaching purposes.')
 
     col1, col2 = st.columns([1, 1], gap="large")
 
@@ -938,7 +960,7 @@ def render_pro_mode():
     # =============================
     # 📈 Core UI: Header + Prediction
     # =============================
-    st.markdown('<div class="chart-header">FUREcast Pro Analytics</div>', unsafe_allow_html=True)
+    header_with_info('FUREcast Pro Analytics', 'Pro mode includes advanced analysis tools and a natural language interface; outputs are explanatory and educational.')
     st.markdown('<div class="sub-header">AI-Powered Investment Insights & Natural Language Interface</div>', unsafe_allow_html=True)
     
     # Get max dataset date for use throughout Pro mode
@@ -985,7 +1007,7 @@ def render_pro_mode():
     st.markdown("---")
     
     # Natural language query interface
-    st.markdown('<div class="chart-header">💬 Ask FUREcast</div>', unsafe_allow_html=True)
+    header_with_info('💬 Ask FUREcast', 'Ask questions in natural language. Responses combine LLM-generated text with model outputs and visualizations — treat as educational commentary.')
     st.markdown('<div class="sub-header">Enter your question about SPLG, sectors, risk, or market trends...</div>', unsafe_allow_html=True)
     
     # Example queries
@@ -1068,13 +1090,13 @@ def render_pro_mode():
             response = compose_answer(query, tool_results, plan)
         
         # Display results
-        st.markdown('<div class="chart-header">Analysis Results</div>', unsafe_allow_html=True)
+        header_with_info('Analysis Results', 'Composed answer summarizing model outputs and tool results related to your query. Educational only — not financial advice.')
         st.markdown(response)
         
         st.markdown("---")
         
         # Generate visualizations based on intent
-        st.markdown('<div class="chart-header">Visualizations</div>', unsafe_allow_html=True)
+        header_with_info('Visualizations', 'Charts and treemaps generated to support the analysis. Interactive elements help explore model behavior and data.')
         
         viz_plan = plan.get('visualization') or {}
         viz_type = viz_plan.get('type', 'price')
@@ -1122,7 +1144,7 @@ def render_pro_mode():
     
     # Additional tools section - MOVED OUTSIDE the conditional logic
     st.markdown("---")
-    st.markdown('<div class="chart-header">Advanced Sector Analytics</div>', unsafe_allow_html=True)
+    header_with_info('Advanced Sector Analytics', 'Deep-dive tools: Sector Risk, Holdings drill-down, Price Trends, and Feature Analysis. Use these to learn how sector composition and holdings influence ETF behavior.')
     
     tab1, tab2, tab3, tab4 = st.tabs(["Sector Risk", "Holdings Detail", "Price Trends", "Feature Analysis"])
 
