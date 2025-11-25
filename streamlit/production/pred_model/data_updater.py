@@ -1,11 +1,10 @@
 """
-FUREcast - SPLG/SPYM Data Updater
+FUREcast - SPYM Data Updater
 
-This module handles automated fetching and updating of SPLG price data
-using yfinance API. If SPLG returns no new data (e.g., due to the
-recent ticker change to SPYM and delayed mirroring), it falls back to
-fetching SPYM for the requested window. It maintains the historical
-dataset and triggers feature engineering when new data is available.
+This module handles automated fetching and updating of SPYM price data
+using yfinance API. Earlier SPLG records remain in the historical CSV,
+but all future updates use the SPYM ticker exclusively to avoid mixed
+partial windows or fallback complexity after the SPLG→SPYM change.
 """
 
 import pandas as pd
@@ -146,15 +145,14 @@ def _fetch_yf_history(
 
 def fetch_new_splg_data(start_date: Optional[datetime] = None,
                         end_date: Optional[datetime] = None) -> Optional[pd.DataFrame]:
-    """
-    Fetch SPLG price data from yfinance.
-    
+    """(Legacy name) Fetch SPYM price data from yfinance.
+
     Args:
-        start_date: Start date for fetching data (default: 1 day after latest in dataset)
-        end_date: End date for fetching data (default: today)
-    
+        start_date: Start date (defaults to day after latest in dataset)
+        end_date: End date (defaults to now)
+
     Returns:
-        DataFrame with SPLG price data, or None if no new data
+        DataFrame with SPYM price data, or None if no new data
     """
     # Determine date range
     if end_date is None:
@@ -175,20 +173,12 @@ def fetch_new_splg_data(start_date: Optional[datetime] = None,
         logger.info("Dataset is already up to date")
         return None
     
-    # Try SPLG first
-    hist = _fetch_yf_history("SPLG", start_date, end_date)
-
-    # If SPLG returned nothing, try SPYM as a fallback
-    if hist is None or hist.empty:
-        logger.info("SPLG returned no new data; attempting SPYM fallback...")
-        hist_spym = _fetch_yf_history("SPYM", start_date, end_date)
-        if hist_spym is None or hist_spym.empty:
-            logger.info("No new data available from yfinance for SPLG or SPYM")
-            return None
-        logger.info("Using SPYM data as fallback for this update window.")
-        return hist_spym
-
-    return hist
+    # Fetch SPYM directly (no SPLG attempt)
+    hist_spym = _fetch_yf_history("SPYM", start_date, end_date)
+    if hist_spym is None or hist_spym.empty:
+        logger.info("No new SPYM data available for requested window")
+        return None
+    return hist_spym
 
 
 def update_raw_dataset(new_data: pd.DataFrame) -> bool:
@@ -284,7 +274,7 @@ def check_for_updates() -> Tuple[bool, Optional[pd.DataFrame]]:
         Tuple of (has_updates: bool, new_data: Optional[DataFrame])
     """
     logger.info("=" * 70)
-    logger.info("SPLG Data Update Check")
+    logger.info("SPYM Data Update Check")
     logger.info("=" * 70)
     
     # Fetch new data
