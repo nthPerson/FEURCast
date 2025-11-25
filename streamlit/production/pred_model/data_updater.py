@@ -1,9 +1,11 @@
 """
-FUREcast - SPLG Data Updater
+FUREcast - SPLG/SPYM Data Updater
 
 This module handles automated fetching and updating of SPLG price data
-using yfinance API. It maintains the historical dataset and triggers
-feature engineering when new data is available.
+using yfinance API. If SPLG returns no new data (e.g., due to the
+recent ticker change to SPYM and delayed mirroring), it falls back to
+fetching SPYM for the requested window. It maintains the historical
+dataset and triggers feature engineering when new data is available.
 """
 
 import pandas as pd
@@ -80,7 +82,69 @@ def get_latest_date_in_dataset(enable_logging: bool = False) -> Optional[datetim
         return None
 
 
-def fetch_new_splg_data(start_date: Optional[datetime] = None, 
+def _fetch_yf_history(
+    ticker: str,
+    start_date: datetime,
+    end_date: datetime,
+) -> Optional[pd.DataFrame]:
+    """Fetch and normalize yfinance history for a given ticker.
+
+    Returns a dataframe with our standard schema or None if empty/error.
+    """
+    try:
+        logger.info(f"Downloading {ticker} data from yfinance...")
+        tk = yf.Ticker(ticker)
+        hist = tk.history(start=start_date, end=end_date, interval="1d")
+
+        if hist.empty:
+            logger.info(f"No new data available from yfinance for {ticker}")
+            return None
+
+        hist = hist.reset_index()
+        hist = hist.rename(columns={
+            'Date': 'date',
+            'Open': 'open',
+            'High': 'high',
+            'Low': 'low',
+            'Close': 'close',
+            'Volume': 'volume'
+        })
+
+        info = {}
+        try:
+            info = tk.info or {}
+        except Exception as e:
+            # yfinance info endpoint can be flaky; proceed without
+            logger.warning(f"Could not fetch {ticker} info: {e}")
+
+        pe_ratio_value = info.get('trailingPE', 0.0) if info.get('trailingPE') else 0.0
+        yield_value = info.get('dividendYield', 0.0) * 100 if info.get('dividendYield') else 0.0
+        beta_value = info.get('beta', 0.0) if info.get('beta') else 0.0
+        company_name = info.get('shortName') or info.get('longName') or 'SPDR Portfolio S&P 500 ETF'
+
+        hist['company_name'] = company_name
+        hist['ticker'] = ticker
+        hist['current_price'] = hist['close']
+        hist['pe_ratio'] = pe_ratio_value
+        hist['yield'] = yield_value
+        hist['beta'] = beta_value
+
+        columns = [
+            'date', 'company_name', 'ticker', 'current_price',
+            'open', 'close', 'high', 'low', 'volume',
+            'pe_ratio', 'yield', 'beta'
+        ]
+        hist = hist[columns]
+
+        logger.info(f"✓ Fetched {len(hist)} new records for {ticker}")
+        logger.info(f"  Date range: {pd.to_datetime(hist['date']).min().date()} to {pd.to_datetime(hist['date']).max().date()}")
+        return hist
+    except Exception as e:
+        logger.error(f"Error fetching data from yfinance for {ticker}: {e}")
+        return None
+
+
+def fetch_new_splg_data(start_date: Optional[datetime] = None,
                         end_date: Optional[datetime] = None) -> Optional[pd.DataFrame]:
     """
     Fetch SPLG price data from yfinance.
@@ -111,62 +175,20 @@ def fetch_new_splg_data(start_date: Optional[datetime] = None,
         logger.info("Dataset is already up to date")
         return None
     
-    try:
-        # Fetch data from yfinance
-        logger.info(f"Downloading SPLG data from yfinance...")
-        splg = yf.Ticker("SPLG")
-        
-        # Get historical data
-        hist = splg.history(start=start_date, end=end_date, interval="1d")
-        
-        if hist.empty:
-            logger.info("No new data available from yfinance")
+    # Try SPLG first
+    hist = _fetch_yf_history("SPLG", start_date, end_date)
+
+    # If SPLG returned nothing, try SPYM as a fallback
+    if hist is None or hist.empty:
+        logger.info("SPLG returned no new data; attempting SPYM fallback...")
+        hist_spym = _fetch_yf_history("SPYM", start_date, end_date)
+        if hist_spym is None or hist_spym.empty:
+            logger.info("No new data available from yfinance for SPLG or SPYM")
             return None
-        
-        # Reset index to make Date a column
-        hist = hist.reset_index()
-        
-        # Rename columns to match our schema
-        hist = hist.rename(columns={
-            'Date': 'date',
-            'Open': 'open',
-            'High': 'high',
-            'Low': 'low',
-            'Close': 'close',
-            'Volume': 'volume'
-        })
-        
-        # Get additional info from ticker
-        info = splg.info
-        pe_ratio_value = info.get('trailingPE', 0.0) if info.get('trailingPE') else 0.0
-        yield_value = info.get('dividendYield', 0.0) * 100 if info.get('dividendYield') else 0.0
-        beta_value = info.get('beta', 0.0) if info.get('beta') else 0.0
-        
-        # Add metadata columns with consistent naming (underscores only)
-        hist['company_name'] = 'SPDR Portfolio S&P 500 ETF'
-        hist['ticker'] = 'SPLG'
-        hist['current_price'] = hist['close']  # Use close as current price
-        hist['pe_ratio'] = pe_ratio_value
-        hist['yield'] = yield_value
-        hist['beta'] = beta_value
-        
-        # Select and order columns to match CSV convention exactly
-        columns = [
-            'date', 'company_name', 'ticker', 'current_price',
-            'open', 'close', 'high', 'low', 'volume',
-            'pe_ratio', 'yield', 'beta'
-        ]
-        
-        hist = hist[columns]
-        
-        logger.info(f"✓ Fetched {len(hist)} new records")
-        logger.info(f"  Date range: {hist['date'].min().date()} to {hist['date'].max().date()}")
-        
-        return hist
-        
-    except Exception as e:
-        logger.error(f"Error fetching data from yfinance: {e}")
-        return None
+        logger.info("Using SPYM data as fallback for this update window.")
+        return hist_spym
+
+    return hist
 
 
 def update_raw_dataset(new_data: pd.DataFrame) -> bool:
