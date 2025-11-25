@@ -1,3 +1,9 @@
+# FUREcast SPYM Prediction Model (Legacy SPLG Historical Data)
+
+This directory contains the GradientBoostingRegressor (GBR) model for predicting next-day returns on the SPYM ETF (formerly SPLG). Historical data was collected under the SPLG ticker and filenames (e.g., `SPLG_history_full.csv`, `rich_features_SPLG_history_full.csv`) are retained for backward compatibility, but all future updates use SPYM exclusively.
+**Dataset**: `rich_features_SPLG_history_full.csv` (legacy SPLG naming; includes SPYM appended rows after ticker migration)
+
+## Directory Structure
 # FUREcast SPLG Prediction Model
 
 This directory contains the GradientBoostingRegressor (GBR) model for predicting next-day returns on the SPLG ETF, along with training scripts, evaluation tools, and inference interfaces.
