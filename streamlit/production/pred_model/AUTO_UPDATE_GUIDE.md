@@ -3,7 +3,7 @@
 ## 📋 Overview
 
 This system automatically:
-1. ✅ Fetches latest SPLG price data from yfinance (free API)
+1. ✅ Fetches latest SPYM price data from yfinance (historical rows include legacy SPLG; filenames retain SPLG for compatibility)
 2. ✅ Updates the historical dataset
 3. ✅ Rebuilds all 110 features using the feature engineering pipeline
 4. ✅ Retrains the GBR prediction model
@@ -45,18 +45,18 @@ This will guide you through setting up a cron job with options:
 ## 📂 System Components
 
 ### 1. `data_updater.py`
-**Purpose**: Fetches new SPLG data from yfinance
+**Purpose**: Fetches new SPYM data from yfinance (legacy SPLG historical maintained)
 
 **Key Functions**:
 - `check_for_updates()` - Main entry point, checks for and downloads new data
 - `fetch_new_splg_data()` - Queries yfinance API for SPLG data
 - `update_raw_dataset()` - Appends new data to raw CSV
 
-**Data Source**: Yahoo Finance via yfinance library (free, no API key needed)
+**Data Source**: Yahoo Finance via yfinance library (ticker now SPYM; SPLG delisted)
 
 **Update Frequency**: Can run as often as desired - automatically detects if new data is available
 
-**Output**: Updates `/home/robert/FEURCast/data/SPLG_history_full.csv`
+**Output**: Updates `/home/robert/FEURCast/data/SPLG_history_full.csv` (legacy name)
 
 ### 2. `feature_updater.py`
 **Purpose**: Rebuilds feature-engineered dataset
@@ -367,7 +367,7 @@ To improve performance:
 ### File Structure
 ```
 pred_model/
-├── data_updater.py          # Fetch SPLG data
+├── data_updater.py          # Fetch SPYM data (legacy SPLG filenames)
 ├── feature_updater.py       # Rebuild features
 ├── training_logger.py       # Log training results
 ├── update_and_retrain.py    # Main orchestration script

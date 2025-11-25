@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-FUREcast - Automated Update and Retrain
+FUREcast - Automated Update and Retrain (SPYM)
 
 This script orchestrates the complete workflow:
-1. Check for new SPLG data from yfinance
-2. Update the raw dataset
+1. Check for new SPYM data from yfinance (historical rows retain legacy SPLG ticker)
+2. Update the raw dataset (`SPLG_history_full.csv` retains naming for backward compatibility)
 3. Rebuild features from updated data
 4. Retrain the prediction model
 5. Log training results
@@ -140,7 +140,7 @@ def load_model_metadata() -> dict:
 
 def main():
     """Main orchestration function"""
-    parser = argparse.ArgumentParser(description='Update SPLG data and retrain model')
+    parser = argparse.ArgumentParser(description='Update SPYM data (legacy SPLG file names) and retrain model')
     parser.add_argument('--force', action='store_true', help='Force update and retrain even if no new data')
     parser.add_argument('--quick', action='store_true', help='Use quick training mode')
     parser.add_argument('--tune', action='store_true', help='Perform hyperparameter tuning (GridSearch)')

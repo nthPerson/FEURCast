@@ -27,7 +27,7 @@ python training_logger.py
 
 ## 📋 What It Does
 
-1. **Fetches new SPLG data** from yfinance (free, no API key)
+1. **Fetches new SPYM data** from yfinance (legacy SPLG rows retained; file names unchanged)
 2. **Updates raw dataset** at `/data/SPLG_history_full.csv`
 3. **Rebuilds features** (all 115 features, 110 used in model)
 4. **Retrains GBR model** with latest data
@@ -94,7 +94,7 @@ python update_and_retrain.py --quick --force
 ```
 pred_model/
 ├── update_and_retrain.py    ← Main script
-├── data_updater.py           ← Fetches SPLG data
+├── data_updater.py           ← Fetches SPYM data (legacy file names use SPLG)
 ├── feature_updater.py        ← Rebuilds features
 ├── training_logger.py        ← Logs results
 ├── test_update_system.py     ← Test suite

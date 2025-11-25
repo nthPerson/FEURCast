@@ -7,7 +7,7 @@ python test_update_system.py
 ```
 Expected: `✓ Results: 5/5 tests passed`
 
-## Run Manual Update
+## Run Manual Update (SPYM data)
 ```bash
 # Quick test (20 sec)
 python update_and_retrain.py --quick
@@ -51,4 +51,6 @@ streamlit run app.py
 
 ---
 
-**That's it!** Your model will now update automatically every day at 6pm ET.
+**Ticker Change Note**: As of late October 2025 the SPLG ticker migrated to **SPYM**. The updater now fetches SPYM exclusively as of 11/24/25. Historical files keep the `SPLG` naming (`SPLG_history_full.csv`, `rich_features_SPLG_history_full.csv`) for compatibility.
+
+**Ongoing Effects:** The GBR model will now update automatically every day at 6pm ET using SPYM data.
