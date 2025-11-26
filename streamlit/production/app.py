@@ -99,6 +99,7 @@ from simulator import (
     get_sector_summary,
     create_feature_importance_chart,
     create_sector_comparison_chart,
+    get_holdings_top_n,
 )
 from llm_interface import (
     route_query,
@@ -142,7 +143,7 @@ st.markdown("""
     .main-header, p.main-header { font-size: 2.5rem; font-weight: bold; color: #2E86AB; margin-bottom: 0.5rem; }
     .sub-header, p.sub-header { font-size: 1.2rem; color: #666; margin-bottom: 2rem; }
     /* Chart-style header - ensure block-level and stacking so it remains visible above nearby panels */
-    .chart-header, p.chart-header, div.chart-header { font-size: 1.20rem; font-weight: 800; margin: 0.6rem 0; display:block; position:relative; z-index:50; }
+    .chart-header, p.chart-header, div.chart-header { font-size: 1.80rem; font-weight: 800; margin: 0.6rem 0; display:block; position:relative; z-index:50; }
 
     /* Provide theme-aware CSS variables for nav and header colors so other rules can reuse them */
     html[data-theme='dark'], body[data-theme='dark'] {
@@ -191,17 +192,13 @@ st.markdown("""
         color: var(--app-text-primary) !important;
     }
 
-    /* Make nav tiles respond to theme variables so they remain readable */
-    :root { --nav-bg: #f6f8fb; --nav-text: #0b0d10; --nav-border: rgba(15,23,42,0.06); }
+    /* Keep basic nav layout rules here, but let render_top_nav define colors. */
     section[data-testid='stHorizontalBlock'] > div div button,
     .nav-tile {
-        background: var(--nav-bg) !important;
-        color: var(--nav-text) !important;
         border-radius: 10px !important;
         padding: 0 18px !important;
         font-weight: 700 !important;
         font-size: 15px !important;
-        border: 2px solid var(--nav-border) !important;
         text-align: center !important;
         cursor: pointer !important;
         display: block !important;
@@ -214,18 +211,6 @@ st.markdown("""
         overflow: hidden !important;
         text-overflow: ellipsis !important;
         box-sizing: border-box !important;
-    }
-
-    /* Hover and active states (keep small shadow) */
-    section[data-testid='stHorizontalBlock'] > div div button:hover,
-    .nav-tile:hover { box-shadow: 0 2px 6px rgba(0,0,0,0.04) !important; }
-
-    .nav-active,
-    section[data-testid='stHorizontalBlock'] > div div button.nav-active {
-        background: var(--nav-bg) !important;
-        color: var(--nav-text) !important;
-        border: 2px solid var(--nav-border) !important;
-        box-shadow: none !important;
     }
 
     .feature-item { display: flex; justify-content: space-between; padding: 0.5rem; border-bottom: 1px solid #eee; }
@@ -314,7 +299,8 @@ def render_top_nav():
     ]
     current = st.session_state.get("page", "home")
 
-    cols = st.columns([1] * len(nav_items) + [2])
+    # Single full-width row: nav buttons span the page like the headline ribbon
+    cols = st.columns([1] * len(nav_items))
 
     # Inline CSS for nav tiles (active + inactive)
     active_color = "#f4f6f8"  # light grey background
@@ -324,7 +310,24 @@ def render_top_nav():
     css = f"""
     <style>
     /* Unified light-style nav tiles: light background, dark text, uniform height */
-    :root {{ --nav-bg: #f6f8fb; --nav-text: #0b0d10; --nav-border: rgba(15,23,42,0.06); --nav-active-bg: #eaf6ff; --nav-accent: #f5f7f9; }}
+    :root {{
+        --nav-bg: #f6f8fb;
+        --nav-text: #0b0d10;
+        --nav-border: rgba(15,23,42,0.06);
+        --nav-active-bg: #eaf6ff;
+        --nav-accent: #f5f7f9;
+        --nav-home-bg: #0b5ed7;
+        --nav-home-text: #ffffff;
+    }}
+
+    html[data-theme='dark'], body[data-theme='dark'] {{
+        --nav-bg: #0f1720;
+        --nav-text: #ffffff;
+        --nav-border: rgba(255,255,255,0.12);
+        --nav-active-bg: #111827;
+        --nav-home-bg: #2563eb;   /* slightly brighter blue on dark */
+        --nav-home-text: #f9fafb;
+    }}
 
     section[data-testid='stHorizontalBlock'] > div div button,
     .nav-tile {{
@@ -376,113 +379,46 @@ def render_top_nav():
     </style>
     """
 
-    # Compute which nav button (by position) is active so we can target it with CSS
-    try:
-        active_idx = next(i + 1 for i, (_, k) in enumerate(nav_items) if k == current)
-    except StopIteration:
-        active_idx = 1
-
-    # Update CSS to style the active button (position-based) so all nav items are rendered
-    # as Streamlit buttons (identical DOM) and only their colors change when active.
-    # Active styling: only change background color to accent and text to white
-    # Target the nth column's button (columns render as sibling divs). Using
-    # the column-level nth-child ensures we select the correct button even when
-    # Streamlit nests extra wrappers inside each column div.
-        css_active = css + f"\n<style>section[data-testid='stHorizontalBlock'] > div > div:nth-child({active_idx}) button {{ background: #ffffff !important; color: var(--nav-text) !important; border: 2px solid var(--nav-border) !important; border-radius:12px !important; box-shadow: 0 2px 6px rgba(0,0,0,0.04) !important; }}</style>"
-        st.markdown(css_active, unsafe_allow_html=True)
-
-        # Some Streamlit versions wrap column content with extra divs; to be robust
-        # add a tiny client-side script that locates the active button and forces
-        # the active styling. It first tries to match by visible label text, then
-        # falls back to the nth-column approach.
-        try:
-                active_label = next(lbl for lbl, k in nav_items if k == current)
-        except StopIteration:
-                active_label = None
-
-        # Escape label for JS string literal
-        safe_label = (active_label or '').replace("\\", "\\\\").replace("'", "\\'")
-
-        js = f"""
-        <script>
-        (function(){{
-            function applyByLabel(lbl){{
-                try {{
-                    var buttons = document.querySelectorAll("section[data-testid='stHorizontalBlock'] button");
-                    if(!buttons || buttons.length === 0) return false;
-                    for(var i=0;i<buttons.length;i++){{
-                        var b = buttons[i];
-                        var txt = (b.innerText || b.textContent || '').trim();
-                        if(!txt) continue;
-                        if(txt === lbl){{
-                            b.style.background = '#ffffff';
-                            var navText = getComputedStyle(document.documentElement).getPropertyValue('--nav-text') || '#0b0d10';
-                            b.style.color = navText.trim();
-                            b.style.border = '2px solid rgba(15,23,42,0.06)';
-                            b.style.borderRadius = '12px';
-                            b.style.boxShadow = '0 2px 6px rgba(0,0,0,0.04)';
-                            return true;
-                        }}
-                    }}
-                }} catch(e){{return false;}}
-                return false;
-            }}
-
-            function applyByIndex(){{
-                try {{
-                    var cols = document.querySelectorAll("section[data-testid='stHorizontalBlock'] > div > div");
-                    var idx = {active_idx} - 1;
-                    if(!cols || cols.length === 0) return false;
-                    var target = cols[idx];
-                    if(!target) return true;
-                    var btn = target.querySelector("button");
-                    if(!btn) return false;
-                    btn.style.background = '#ffffff';
-                    var navText = getComputedStyle(document.documentElement).getPropertyValue('--nav-text') || '#0b0d10';
-                    btn.style.color = navText.trim();
-                    btn.style.border = '2px solid rgba(15,23,42,0.06)';
-                    btn.style.borderRadius = '12px';
-                    btn.style.boxShadow = '0 2px 6px rgba(0,0,0,0.04)';
-                    return true;
-                }} catch(e){{return false;}}
-            }}
-
-            var tries = 0;
-            var t = setInterval(function(){{
-                var done = false;
-                // try label match first
-                if('{safe_label}') done = applyByLabel('{safe_label}');
-                // fallback to index
-                if(!done) done = applyByIndex();
-                if(done || ++tries > 40) clearInterval(t);
-            }}, 100);
-        }})();
-        </script>
-        """
-        st.markdown(js, unsafe_allow_html=True)
+    # Simple CSS only: no JS-based overrides for active nav styling.
+    st.markdown(css, unsafe_allow_html=True)
 
     # Render each nav item as a Streamlit button so DOM is consistent and size doesn't change
-    for (label, key), col in zip(nav_items, cols[:-1]):
-        clicked = col.button(label, key=f"topnav_{key}", use_container_width=True)
-        if clicked:
-            st.session_state.page = key
-            safe_rerun()
+    for (base_label, key), col in zip(nav_items, cols):
+        # For the Home button only, show mode and hint text, and toggle Lite/Pro
+        if key == "home":
+            current_mode = st.session_state.get("mode", "Lite")
+            if current_mode == "Lite":
+                label = "Home (Lite, click for Pro)"
+                next_mode = "Pro"
+            else:
+                label = "Home (Pro, click for Lite)"
+                next_mode = "Lite"
 
-    # Right column intentionally left empty; mode control is under the Home tile.
-    mode_col = cols[-1]
+            # Use a distinct, theme-aware style for the Home button
+            home_btn = col.button(label, key=f"topnav_{key}", use_container_width=True)
+            if home_btn:
+                st.session_state.mode = next_mode
+                st.session_state.page = "home"
+                safe_rerun()
 
-    # If the Home button is active, render the Mode radio beneath the first column
-    if current == 'home':
-        # Put the Mode control under the first column so layout is predictable
-        cols[0].markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
-        cols[0].radio(
-            "Mode",
-            options=['Lite', 'Pro'],
-            key="topnav_mode",
-            index=0 if st.session_state.get("mode", "Lite") == 'Lite' else 1,
-            on_change=_sidebar_mode_changed,
-            label_visibility='collapsed'
-        )
+            # Inject a small CSS snippet to recolor the rendered Home button only
+            st.markdown(
+                """
+                <style>
+                section[data-testid='stHorizontalBlock'] > div div:first-child button {
+                    background: var(--nav-home-bg) !important;
+                    color: var(--nav-home-text) !important;
+                    border-color: rgba(15,23,42,0.15) !important;
+                }
+                </style>
+                """,
+                unsafe_allow_html=True,
+            )
+        else:
+            clicked = col.button(base_label, key=f"topnav_{key}", use_container_width=True)
+            if clicked:
+                st.session_state.page = key
+                safe_rerun()
 
 
 
@@ -506,6 +442,17 @@ def render_sidebar():
                 st.image(gbr_img_path, caption="GBR Model Architecture", use_container_width=True)
 
         if current in ("home", "performance"):
+            st.markdown("### ℹ️ About FUREcast")
+            st.markdown("""
+            Interactive dashboard showcasing SPLG ETF analysis with GradientBoostingRegressor and LLM orchestration.
+            """)
+            with st.expander("Data Sources", expanded=False):
+                st.markdown("- SPLG historical data (2005-2025)\n- Sector ETF data\n- Technical indicators\n- Risk metrics")
+            with st.expander("Agent Architecture", expanded=False):
+                st.markdown("1. User Query\n2. LLM Router\n3. Tool Planner\n4. Tool Executor\n5. Answer Composer\n6. UI Renderer")
+            # st.markdown('<div class="disclaimer">⚠️ <strong>Educational Use Only</strong><br>Not financial advice.</div>', unsafe_allow_html=True)
+
+            st.markdown("---")
             st.sidebar.header("Chart Filters")
             st.session_state.metric = st.selectbox(
                 "Select Price Metric",
@@ -537,17 +484,6 @@ def render_sidebar():
             # Convert back to Timestamp for consistency
             st.session_state.start_date = pd.to_datetime(st.session_state.start_date)
             st.session_state.end_date = pd.to_datetime(st.session_state.end_date)
-
-            st.markdown("---")
-            st.markdown("### ℹ️ About FUREcast")
-            st.markdown("""
-            Interactive dashboard showcasing SPLG ETF analysis with GradientBoostingRegressor and LLM orchestration.
-            """)
-            with st.expander("Data Sources", expanded=False):
-                st.markdown("- SPLG historical data (2005-2025)\n- Sector ETF data\n- Technical indicators\n- Risk metrics")
-            with st.expander("Agent Architecture", expanded=False):
-                st.markdown("1. User Query\n2. LLM Router\n3. Tool Planner\n4. Tool Executor\n5. Answer Composer\n6. UI Renderer")
-            st.markdown('<div class="disclaimer">⚠️ <strong>Educational Use Only</strong><br>Not financial advice.</div>', unsafe_allow_html=True)
         else:
             # Compact sidebar for Glossary or other pages where filters are not needed
             st.markdown("### ℹ️ About FUREcast")
@@ -608,9 +544,12 @@ def render_feature_importance(features):
             st.markdown("*Feature importance shows key indicators influencing prediction.*")
 
 
-def render_lite_mode():
+def render_latest_headlines_strip():
+    """Render the scrolling latest headlines strip with no section header.
+
+    This is called at the top of each page, above all other content.
+    """
     import requests
-    # News Channel (TOP SECTION)
     url = f"https://finnhub.io/api/v1/news?category=general&token={MARKETSENTIMENT_API_KEY}"
 
     try:
@@ -620,61 +559,63 @@ def render_lite_mode():
         st.error(f"Error fetching news: {e}")
         articles = []
 
-    header_with_info('Latest Market Headlines', 'Curated market headlines. Sentiment classification is heuristic and provided for educational context only.')
-
     if not articles or not isinstance(articles, list):
         st.warning("No recent S&P 500 news found.")
-    else:
-        articles = sorted(articles, key=lambda x: x.get("datetime", 0), reverse=True)
-        display_articles = articles[:20]
+        return
 
-        headlines_html = ""
-        for a in display_articles:
-            headline = a.get("headline", "Untitled")
-            link = a.get("url", "#")
-            sentiment = "neutral"
-            if any(w in headline.lower() for w in ["up", "gain", "growth", "rally", "record"]):
-                sentiment = "positive"
-            elif any(w in headline.lower() for w in ["down", "loss", "drop", "fall", "decline"]):
-                sentiment = "negative"
+    articles = sorted(articles, key=lambda x: x.get("datetime", 0), reverse=True)
+    display_articles = articles[:20]
 
-            color = (
-                "#00ff99" if sentiment == "positive"
-                else "#ff4d4d" if sentiment == "negative"
-                else "white"
-            )
-            headlines_html += f'📈 <a href="{link}" target="_blank" style="color:{color}; text-decoration:none; margin-right:50px;">{headline}</a>'
+    headlines_html = ""
+    for a in display_articles:
+        headline = a.get("headline", "Untitled")
+        link = a.get("url", "#")
+        sentiment = "neutral"
+        if any(w in headline.lower() for w in ["up", "gain", "growth", "rally", "record"]):
+            sentiment = "positive"
+        elif any(w in headline.lower() for w in ["down", "loss", "drop", "fall", "decline"]):
+            sentiment = "negative"
 
-        st.markdown(
-            f"""
-            <div style="background-color:#001f3f; padding:5px; border-radius:8px; margin-bottom:5px;">
-                <marquee behavior="scroll" direction="left" scrollamount="5"
-                         style="font-size:20px; font-weight:500;">
-                    {headlines_html}
-                </marquee>
-            </div>
-            """,
-            unsafe_allow_html=True,
+        color = (
+            "#00ff99" if sentiment == "positive"
+            else "#ff4d4d" if sentiment == "negative"
+            else "white"
         )
-        
-    # =============================
-    # Macro & Sentiment Dashboard (FRED + Sentiment Combined)
-    # =============================
+        headlines_html += f'📈 <a href="{link}" target="_blank" style="color:{color}; text-decoration:none; margin-right:50px;">{headline}</a>'
+
+    st.markdown(
+        f"""
+        <div style="background-color:#001f3f; padding:5px; border-radius:8px; margin-bottom:5px;">
+            <marquee behavior="scroll" direction="left" scrollamount="5"
+                     style="font-size:20px; font-weight:500;">
+                {headlines_html}
+            </marquee>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def compute_macro_and_sentiment():
+    """Fetch macro series and compute statuses/colors once per run.
+
+    Returns unemployment_rate, public_debt_pct, un_status, un_color,
+    debt_status, debt_color. Coloring thresholds mirror the original
+    Lite/Pro implementations.
+    """
     import requests
-    # Use env/secrets-provided key; if missing, skip FRED calls gracefully
     base_url = "https://api.stlouisfed.org/fred/series/observations"
 
     if not FRED_KEY:
         unemployment_rate = None
         public_debt_pct = None
     else:
-        # --- Fetch Unemployment Rate (UNRATE) ---
         params_un = {
             "series_id": "UNRATE",
             "api_key": FRED_KEY,
             "file_type": "json",
             "sort_order": "desc",
-            "limit": 1
+            "limit": 1,
         }
         try:
             resp_un = requests.get(base_url, params=params_un, timeout=5)
@@ -683,13 +624,12 @@ def render_lite_mode():
         except Exception:
             unemployment_rate = None
 
-        # --- Fetch Public Debt to GDP Ratio (GFDEGDQ188S) ---
         params_debt = {
             "series_id": "GFDEGDQ188S",
             "api_key": FRED_KEY,
             "file_type": "json",
             "sort_order": "desc",
-            "limit": 1
+            "limit": 1,
         }
         try:
             resp_debt = requests.get(base_url, params=params_debt, timeout=5)
@@ -698,71 +638,63 @@ def render_lite_mode():
         except Exception:
             public_debt_pct = None
 
-    # --- Threshold Logic ---
     def indicator_status(value, good_max):
         if value is None:
             return "N/A", "grey"
         if value <= good_max:
-            return "Acceptable", "green"
+            return "Acceptable", "#0b8a3e"
         else:
-            return "Bad", "red"
+            return "Bad", "#d62828"
 
-    un_status, un_color = indicator_status(unemployment_rate, 6.0) # Unemployment: 0 to 6% acceptable (the closer to 0 the better) 6.1% and above BAD
-    debt_status, debt_color = indicator_status(public_debt_pct, 70.0) #Public Debt: 0 to 70% acceptable (the closer to 0 the better) 71% and above BAD
+    un_status, un_color = indicator_status(unemployment_rate, 6.0)
+    debt_status, debt_color = indicator_status(public_debt_pct, 70.0)
+    return unemployment_rate, public_debt_pct, un_status, un_color, debt_status, debt_color
 
+def render_macro_and_sentiment_tiles(unemployment_rate, public_debt_pct, un_status, un_color, debt_status, debt_color):
+    """Render compact Macro & Sentiment tiles used globally below headlines.
 
-    # --- Display Combined Indicators ---
-    header_with_info('Macro & Sentiment Dashboard', 'High-level macro indicators (e.g., unemployment, public debt) combined with simple sentiment cues. Thresholds and colors are illustrative for teaching purposes.')
-
-    # Use equal-width columns with a slightly larger gap and full-width panels
-    col1, col2 = st.columns([1, 1], gap="large")
+    Values and colors are passed in so we can reuse the same data
+    for all pages without recomputing. Coloring comes from the
+    shared indicator_status logic and must remain unchanged.
+    """
+    # Smaller typography / padding so tiles are visually de-emphasized
+    col1, col2 = st.columns([1, 1], gap="small")
 
     panel_style = (
-        "padding:12px; border-radius:10px; "
-        "background:linear-gradient(180deg,#f8f9fa,#eef2f5); "
-        "border:1px solid rgba(0,0,0,0.06); box-shadow:0 2px 8px rgba(0,0,0,0.06); "
-        "width:100%; box-sizing:border-box;"
+        "padding:8px; border-radius:10px; "
+        "background:linear-gradient(180deg,#fbfdff,#f1f6fb); "
+        "border:1px solid rgba(15,23,42,0.06); width:100%; box-sizing:border-box; color:#0b0d10;"
     )
 
     with col1:
-        # Show unemployment with status badge using computed color (stretches full column width)
         un_display = f"{unemployment_rate:.1f}%" if unemployment_rate is not None else "N/A"
-        # stronger, explicit dark text for visibility in Streamlit dark theme
-        panel_style_lite = (
-            "padding:14px; border-radius:12px; "
-            "background:linear-gradient(180deg,#fbfdff,#f1f6fb); "
-            "border:1px solid rgba(15,23,42,0.06); width:100%; box-sizing:border-box; color:#0b0d10;"
-        )
         st.markdown(
-            f"<div style='{panel_style_lite}'>"
-            f"<div style='font-size:1.0rem; font-weight:700; color:#0b0d10; opacity:0.95;'>Unemployment Rate</div>"
-            f"<div style='font-size:1.6rem; margin-top:6px; color:#0b0d10; font-weight:800;'>{un_display}</div>"
-            f"<div style='margin-top:10px; color:{un_color}; font-weight:800;'>{un_status}</div>"
-            f"</div>",
+            f"<div style='{panel_style}'>"
+            f"<div style='display:flex; align-items:center; justify-content:center; gap:8px; font-size:0.95rem; text-align:center;'>"
+            f"<span style='font-weight:600; color:#0b0d10; opacity:0.95;'>Unemployment Rate</span>"
+            f"<span style='font-weight:700; color:#0b0d10;'>{un_display}</span>"
+            f"<span style='font-weight:700; color:{un_color};'>{un_status}</span>"
+            f"</div></div>",
             unsafe_allow_html=True,
         )
 
     with col2:
-        # Show public debt with status badge using computed color (stretches full column width)
         debt_display = f"{public_debt_pct:.1f}%" if public_debt_pct is not None else "N/A"
         st.markdown(
-            f"<div style='{panel_style_lite}'>"
-            f"<div style='font-size:1.0rem; font-weight:700; color:#0b0d10; opacity:0.95;'>Public Debt (% of GDP)</div>"
-            f"<div style='font-size:1.6rem; margin-top:6px; color:#0b0d10; font-weight:800;'>{debt_display}</div>"
-            f"<div style='margin-top:10px; color:{debt_color}; font-weight:800;'>{debt_status}</div>"
-            f"</div>",
+            f"<div style='{panel_style}'>"
+            f"<div style='display:flex; align-items:center; justify-content:center; gap:8px; font-size:0.95rem; text-align:center;'>"
+            f"<span style='font-weight:600; color:#0b0d10; opacity:0.95;'>Public Debt (% of GDP)</span>"
+            f"<span style='font-weight:700; color:#0b0d10;'>{debt_display}</span>"
+            f"<span style='font-weight:700; color:{debt_color};'>{debt_status}</span>"
+            f"</div></div>",
             unsafe_allow_html=True,
         )
 
 
-    # --- Optional Styling ---
-    st.markdown("""
-    <style>[data-testid="stMetricValue"] {font-size: 1.4rem !important;}
-    [data-testid="stMetricLabel"] {color: #1c1c1c;}
-    </style>
-    """, unsafe_allow_html=True)
-    # Divider after Macro & Sentiment Dashboard to separate from core UI
-    st.markdown("---")
+
+def render_lite_mode():
+    # Lite mode now assumes macro & sentiment tiles have already been
+    # rendered globally near the top of the page.
     # =============================
     # 📈 Core UI: Header + Prediction
     # =============================
@@ -820,154 +752,14 @@ def render_lite_mode():
     st.info("""
     **💡 How to Use This Tool:**
     1. Review model prediction  
-    2. Check confidence score  
-    3. Examine feature influence  
-    4. Compare with recent price trends  
-    *Educational use only.*
+    2. Examine feature influence  
+    3. Compare with recent price trends  
     """)
 
 
 # ---------- PRO MODE ----------
 def render_pro_mode():
-    import requests
-    # News Channel (TOP SECTION)
-    url = f"https://finnhub.io/api/v1/news?category=general&token={MARKETSENTIMENT_API_KEY}"
 
-    try:
-        response = requests.get(url, timeout=5)
-        articles = response.json()
-    except Exception as e:
-        st.error(f"Error fetching news: {e}")
-        articles = []
-
-    header_with_info('Latest Market Headlines', 'Curated market headlines. Sentiment classification is heuristic and provided for educational context only.')
-
-    if not articles or not isinstance(articles, list):
-        st.warning("No recent S&P 500 news found.")
-    else:
-        articles = sorted(articles, key=lambda x: x.get("datetime", 0), reverse=True)
-        display_articles = articles[:20]
-
-        headlines_html = ""
-        for a in display_articles:
-            headline = a.get("headline", "Untitled")
-            link = a.get("url", "#")
-            sentiment = "neutral"
-            if any(w in headline.lower() for w in ["up", "gain", "growth", "rally", "record"]):
-                sentiment = "positive"
-            elif any(w in headline.lower() for w in ["down", "loss", "drop", "fall", "decline"]):
-                sentiment = "negative"
-
-            color = (
-                "#00ff99" if sentiment == "positive"
-                else "#ff4d4d" if sentiment == "negative"
-                else "white"
-            )
-            headlines_html += f'📈 <a href="{link}" target="_blank" style="color:{color}; text-decoration:none; margin-right:50px;">{headline}</a>'
-
-        st.markdown(
-            f"""
-            <div style="background-color:#001f3f; padding:5px; border-radius:8px; margin-bottom:5px;">
-                <marquee behavior="scroll" direction="left" scrollamount="5"
-                         style="font-size:20px; font-weight:500;">
-                    {headlines_html}
-                </marquee>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        
-    # =============================
-    # Macro & Sentiment Dashboard (FRED + Sentiment Combined)
-    # =============================
-    import requests
-    base_url = "https://api.stlouisfed.org/fred/series/observations"
-
-    if not FRED_KEY:
-        unemployment_rate = None
-        public_debt_pct = None
-    else:
-        # --- Fetch Unemployment Rate (UNRATE) ---
-        params_un = {
-            "series_id": "UNRATE",
-            "api_key": FRED_KEY,
-            "file_type": "json",
-            "sort_order": "desc",
-            "limit": 1
-        }
-        try:
-            resp_un = requests.get(base_url, params=params_un, timeout=5)
-            data_un = resp_un.json().get("observations", [])
-            unemployment_rate = float(data_un[0].get("value", 0)) if data_un else None
-        except Exception:
-            unemployment_rate = None
-
-        # --- Fetch Public Debt to GDP Ratio (GFDEGDQ188S) ---
-        params_debt = {
-            "series_id": "GFDEGDQ188S",
-            "api_key": FRED_KEY,
-            "file_type": "json",
-            "sort_order": "desc",
-            "limit": 1
-        }
-        try:
-            resp_debt = requests.get(base_url, params=params_debt, timeout=5)
-            data_debt = resp_debt.json().get("observations", [])
-            public_debt_pct = float(data_debt[0].get("value", 0)) if data_debt else None
-        except Exception:
-            public_debt_pct = None
-    # =============================
-    # 📊 Macro & Sentiment Dashboard (Pro Mode)
-    # Render two summary tiles with explicit dark text so they are readable in Streamlit dark theme
-    # =============================
-
-    # Helper to compute status + color (same thresholds as Lite mode)
-    def indicator_status(value, good_max):
-        if value is None:
-            return "N/A", "grey"
-        if value <= good_max:
-            return "Acceptable", "#0b8a3e"
-        else:
-            return "Bad", "#d62828"
-
-    un_status, un_color = indicator_status(unemployment_rate, 6.0)
-    debt_status, debt_color = indicator_status(public_debt_pct, 70.0)
-
-    header_with_info('Macro & Sentiment Dashboard', 'High-level macro indicators (e.g., unemployment, public debt) combined with simple sentiment cues. Thresholds and colors are illustrative for teaching purposes.')
-
-    col1, col2 = st.columns([1, 1], gap="large")
-
-    # Panel style uses a light background with explicit dark text color to ensure readability
-    panel_style = (
-        "padding:14px; border-radius:12px; "
-        "background:linear-gradient(180deg,#fbfdff,#f1f6fb); "
-        "border:1px solid rgba(15,23,42,0.06); width:100%; box-sizing:border-box; color:#0b0d10;"
-    )
-
-    with col1:
-        un_display = f"{unemployment_rate:.1f}%" if unemployment_rate is not None else "N/A"
-        st.markdown(
-            f"<div style='{panel_style}'>"
-            f"<div style='font-size:1.0rem; font-weight:700; color:#0b0d10; opacity:0.95;'>Unemployment Rate</div>"
-            f"<div style='font-size:1.8rem; margin-top:8px; color:#0b0d10; font-weight:800;'>{un_display}</div>"
-            f"<div style='margin-top:10px; color:{un_color}; font-weight:800;'>{un_status}</div>"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
-
-    with col2:
-        debt_display = f"{public_debt_pct:.1f}%" if public_debt_pct is not None else "N/A"
-        st.markdown(
-            f"<div style='{panel_style}'>"
-            f"<div style='font-size:1.0rem; font-weight:700; color:#0b0d10; opacity:0.95;'>Public Debt (% of GDP)</div>"
-            f"<div style='font-size:1.8rem; margin-top:8px; color:#0b0d10; font-weight:800;'>{debt_display}</div>"
-            f"<div style='margin-top:10px; color:{debt_color}; font-weight:800;'>{debt_status}</div>"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
-
-    # Divider after Macro & Sentiment Dashboard to separate from core UI
-    st.markdown("---")
 
     # =============================
     # 📈 Core UI: Header + Prediction
@@ -1028,8 +820,9 @@ def render_pro_mode():
             "Is now a good time to invest in SPLG?",
             "Which sectors look stable this quarter?",
             "Compare Technology vs Utilities performance",
+            "Show me the top holdings in SPLG",
             "What influenced today's prediction?",
-            "Show me the top holdings in SPLG"
+            "What sectors have the highest risk?"
         ]
         cols = st.columns(2)
         for i, example in enumerate(examples):
@@ -1112,7 +905,34 @@ def render_pro_mode():
         
         viz_plan = plan.get('visualization') or {}
         viz_type = viz_plan.get('type', 'price')
-        
+
+        # If the LLM explicitly requested a table visualization (e.g. top holdings),
+        # honor that first by rendering a DataFrame derived from holdings data.
+        if viz_type == 'table':
+            specs = viz_plan.get('specs', {}) or {}
+            requested_columns = specs.get('columns') or []
+
+            try:
+                # Default to top 20 holdings; this can be tuned later or
+                # extended to read a "top_n" field from specs.
+                holdings_df = get_holdings_top_n(20)
+
+                # Reorder / subset according to the plan's column list when possible.
+                if requested_columns:
+                    cols_available = [c for c in requested_columns if c in holdings_df.columns]
+                    if cols_available:
+                        display_df = holdings_df[cols_available]
+                    else:
+                        display_df = holdings_df
+                else:
+                    display_df = holdings_df
+
+                st.markdown("**Top SPLG Holdings (from plan)**")
+                st.dataframe(display_df, use_container_width=True, hide_index=True)
+            except Exception as e:
+                st.warning(f"Unable to render requested table visualization: {e}")
+
+        # Keyword-based fallbacks for additional visual context
         if 'holding' in query.lower() or 'stock' in query.lower() or 'company' in query.lower():
             # Show detailed holdings treemap
             st.markdown("**SPLG Holdings Drill-Down**")
@@ -1212,9 +1032,32 @@ def render_pro_mode():
 # ---------- MAIN ----------
 def main():
     initialize_session_state()
-    # Top navigation sits above the main content (e.g., above Latest Market Headlines)
+    # Top of page: headlines strip, then compact macro & sentiment tiles,
+    # then main navigation and sidebar.
+    render_latest_headlines_strip()
+
+    (   unemployment_rate,
+		public_debt_pct,
+		un_status,
+		un_color,
+		debt_status,
+		debt_color,
+	) = compute_macro_and_sentiment()
+
+    render_macro_and_sentiment_tiles(
+		unemployment_rate,
+		public_debt_pct,
+		un_status,
+		un_color,
+		debt_status,
+		debt_color,
+	)
+
+    st.markdown("---")
+
     render_top_nav()
     render_sidebar()
+
 
     # Simple page routing
     if st.session_state.page == "performance":

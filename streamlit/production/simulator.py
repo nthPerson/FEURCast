@@ -16,6 +16,95 @@ import os
 from openai import OpenAI
 
 
+def get_holdings_top_n(n: int = 20) -> pd.DataFrame:
+    """Load SPLG holdings and return the top-n by weight.
+
+    This helper is used by the Ask FUREcast plan executor when the
+    LLM requests a custom visualization such as "top holdings table".
+
+    It prefers the treemap nodes file (which already has derived metrics
+    like DailyChangePct, PE, DividendYield, Beta) and falls back to the
+    raw holdings-with-sectors file if needed.
+    """
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data"))
+
+    # First preference: treemap_nodes.csv (used by treemap visualizations)
+    treemap_path = os.path.join(base_dir, "treemap_nodes.csv")
+    holdings_path = os.path.join(base_dir, "holdings-with-sectors.csv")
+
+    df = None
+    if os.path.exists(treemap_path):
+        try:
+            df = pd.read_csv(treemap_path)
+            # Normalize weight column name for consistency
+            if "Weight (%)" in df.columns:
+                df = df.rename(columns={"Weight (%)": "weight"})
+        except Exception:
+            df = None
+
+    # Fallback: raw holdings CSV
+    if df is None and os.path.exists(holdings_path):
+        try:
+            df = pd.read_csv(holdings_path)
+        except Exception:
+            df = None
+
+    if df is None or df.empty:
+        raise FileNotFoundError(
+            "Unable to load SPLG holdings data from treemap_nodes.csv or holdings-with-sectors.csv"
+        )
+
+    # Standardize column names that we care about for the top-holdings table.
+    cols = {c.lower(): c for c in df.columns}
+
+    # Determine holding name column
+    holding_col = None
+    for candidate in ["company", "name"]:
+        if candidate in cols:
+            holding_col = cols[candidate]
+            break
+
+    # Determine weight column
+    weight_col = None
+    for candidate in ["weight", "weight (%)", "weight %"]:
+        if candidate in cols:
+            weight_col = cols[candidate]
+            break
+
+    if weight_col is None:
+        raise ValueError("Holdings data is missing a recognizable weight column.")
+
+    # Sort by weight descending and keep top-n
+    df_sorted = df.sort_values(by=weight_col, ascending=False).head(n).copy()
+
+    # Build a lean DataFrame with standardized column names used by the UI
+    result = pd.DataFrame()
+
+    if holding_col is not None:
+        result["Holding"] = df_sorted[holding_col].astype(str)
+    else:
+        # As a last resort, try ticker
+        ticker_col = cols.get("ticker")
+        if ticker_col is not None:
+            result["Holding"] = df_sorted[ticker_col].astype(str)
+        else:
+            result["Holding"] = df_sorted.index.astype(str)
+
+    # Percentage from weight column
+    result["Percentage"] = df_sorted[weight_col].astype(float)
+
+    # Market Value: we do not have explicit market value in treemap_nodes,
+    # but the holdings-with-sectors file does not include it either. For now
+    # we expose a placeholder using weight as a proxy so the UI has a column
+    # to show; this keeps the table structure consistent with the System Plan.
+    if "Market Value" in df_sorted.columns:
+        result["Market Value"] = df_sorted["Market Value"]
+    else:
+        result["Market Value"] = (result["Percentage"] / 100.0)  # proxy
+
+    return result
+
+
 def get_openai_client():
     """Initialize OpenAI client with API key from environment"""
     try:
