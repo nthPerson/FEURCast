@@ -548,7 +548,7 @@ def render_sidebar():
                 st.markdown("- SPLG historical data (2005-2025)\n- Sector ETF data\n- Technical indicators\n- Risk metrics")
             with st.expander("Architecture", expanded=False):
                 st.markdown("1. User Query\n2. LLM Router\n3. Tool Planner\n4. Tool Executor\n5. Answer Composer\n6. UI Renderer")
-            st.markdown('<div class="disclaimer">⚠️ <strong>Educational Only</strong><br>Not financial advice.</div>', unsafe_allow_html=True)
+            st.markdown('<div class="disclaimer">⚠️ <strong>Educational Use Only</strong><br>Not financial advice.</div>', unsafe_allow_html=True)
         else:
             # Compact sidebar for Glossary or other pages where filters are not needed
             st.markdown("### ℹ️ About FUREcast")
@@ -1103,7 +1103,7 @@ def render_pro_mode():
             response = compose_answer(query, tool_results, plan)
         
         # Display results
-        header_with_info('Analysis Results', 'Composed answer summarizing model outputs and tool results related to your query. Educational only — not financial advice.')
+        header_with_info('Analysis Results', 'Composed answer summarizing model outputs and tool results related to your query. Educational use only — not financial advice.')
         st.markdown(response)
         
         st.markdown("---")
