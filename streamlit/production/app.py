@@ -608,9 +608,12 @@ def render_feature_importance(features):
             st.markdown("*Feature importance shows key indicators influencing prediction.*")
 
 
-def render_lite_mode():
+def render_latest_headlines_strip():
+    """Render the scrolling latest headlines strip with no section header.
+
+    This is called at the top of each page, above all other content.
+    """
     import requests
-    # News Channel (TOP SECTION)
     url = f"https://finnhub.io/api/v1/news?category=general&token={MARKETSENTIMENT_API_KEY}"
 
     try:
@@ -620,43 +623,45 @@ def render_lite_mode():
         st.error(f"Error fetching news: {e}")
         articles = []
 
-    header_with_info('Latest Market Headlines', 'Curated market headlines. Sentiment classification is heuristic and provided for educational context only.')
-
     if not articles or not isinstance(articles, list):
         st.warning("No recent S&P 500 news found.")
-    else:
-        articles = sorted(articles, key=lambda x: x.get("datetime", 0), reverse=True)
-        display_articles = articles[:20]
+        return
 
-        headlines_html = ""
-        for a in display_articles:
-            headline = a.get("headline", "Untitled")
-            link = a.get("url", "#")
-            sentiment = "neutral"
-            if any(w in headline.lower() for w in ["up", "gain", "growth", "rally", "record"]):
-                sentiment = "positive"
-            elif any(w in headline.lower() for w in ["down", "loss", "drop", "fall", "decline"]):
-                sentiment = "negative"
+    articles = sorted(articles, key=lambda x: x.get("datetime", 0), reverse=True)
+    display_articles = articles[:20]
 
-            color = (
-                "#00ff99" if sentiment == "positive"
-                else "#ff4d4d" if sentiment == "negative"
-                else "white"
-            )
-            headlines_html += f'📈 <a href="{link}" target="_blank" style="color:{color}; text-decoration:none; margin-right:50px;">{headline}</a>'
+    headlines_html = ""
+    for a in display_articles:
+        headline = a.get("headline", "Untitled")
+        link = a.get("url", "#")
+        sentiment = "neutral"
+        if any(w in headline.lower() for w in ["up", "gain", "growth", "rally", "record"]):
+            sentiment = "positive"
+        elif any(w in headline.lower() for w in ["down", "loss", "drop", "fall", "decline"]):
+            sentiment = "negative"
 
-        st.markdown(
-            f"""
-            <div style="background-color:#001f3f; padding:5px; border-radius:8px; margin-bottom:5px;">
-                <marquee behavior="scroll" direction="left" scrollamount="5"
-                         style="font-size:20px; font-weight:500;">
-                    {headlines_html}
-                </marquee>
-            </div>
-            """,
-            unsafe_allow_html=True,
+        color = (
+            "#00ff99" if sentiment == "positive"
+            else "#ff4d4d" if sentiment == "negative"
+            else "white"
         )
-        
+        headlines_html += f'📈 <a href="{link}" target="_blank" style="color:{color}; text-decoration:none; margin-right:50px;">{headline}</a>'
+
+    st.markdown(
+        f"""
+        <div style="background-color:#001f3f; padding:5px; border-radius:8px; margin-bottom:5px;">
+            <marquee behavior="scroll" direction="left" scrollamount="5"
+                     style="font-size:20px; font-weight:500;">
+                {headlines_html}
+            </marquee>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_lite_mode():
+    # Headlines strip now rendered globally at top of page
     # =============================
     # Macro & Sentiment Dashboard (FRED + Sentiment Combined)
     # =============================
@@ -829,54 +834,7 @@ def render_lite_mode():
 
 # ---------- PRO MODE ----------
 def render_pro_mode():
-    import requests
-    # News Channel (TOP SECTION)
-    url = f"https://finnhub.io/api/v1/news?category=general&token={MARKETSENTIMENT_API_KEY}"
-
-    try:
-        response = requests.get(url, timeout=5)
-        articles = response.json()
-    except Exception as e:
-        st.error(f"Error fetching news: {e}")
-        articles = []
-
-    header_with_info('Latest Market Headlines', 'Curated market headlines. Sentiment classification is heuristic and provided for educational context only.')
-
-    if not articles or not isinstance(articles, list):
-        st.warning("No recent S&P 500 news found.")
-    else:
-        articles = sorted(articles, key=lambda x: x.get("datetime", 0), reverse=True)
-        display_articles = articles[:20]
-
-        headlines_html = ""
-        for a in display_articles:
-            headline = a.get("headline", "Untitled")
-            link = a.get("url", "#")
-            sentiment = "neutral"
-            if any(w in headline.lower() for w in ["up", "gain", "growth", "rally", "record"]):
-                sentiment = "positive"
-            elif any(w in headline.lower() for w in ["down", "loss", "drop", "fall", "decline"]):
-                sentiment = "negative"
-
-            color = (
-                "#00ff99" if sentiment == "positive"
-                else "#ff4d4d" if sentiment == "negative"
-                else "white"
-            )
-            headlines_html += f'📈 <a href="{link}" target="_blank" style="color:{color}; text-decoration:none; margin-right:50px;">{headline}</a>'
-
-        st.markdown(
-            f"""
-            <div style="background-color:#001f3f; padding:5px; border-radius:8px; margin-bottom:5px;">
-                <marquee behavior="scroll" direction="left" scrollamount="5"
-                         style="font-size:20px; font-weight:500;">
-                    {headlines_html}
-                </marquee>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        
+    # Headlines strip now rendered globally at top of page
     # =============================
     # Macro & Sentiment Dashboard (FRED + Sentiment Combined)
     # =============================
@@ -1212,9 +1170,14 @@ def render_pro_mode():
 # ---------- MAIN ----------
 def main():
     initialize_session_state()
+    
     # Top navigation sits above the main content (e.g., above Latest Market Headlines)
+    # Global latest headlines strip at very top of all pages (no heading)
+    render_latest_headlines_strip()
+
     render_top_nav()
     render_sidebar()
+
 
     # Simple page routing
     if st.session_state.page == "performance":
