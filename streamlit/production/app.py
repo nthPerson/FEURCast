@@ -308,9 +308,9 @@ def render_top_nav():
     # Shortened labels so they remain single-line and neat
     nav_items = [
         ("Home", "home"),
+        ("GBR Model Details", "gbr_details"),
         ("Performance", "performance"),
         ("Glossary", "glossary"),
-        ("GBR Model Details", "gbr_details"),
     ]
     current = st.session_state.get("page", "home")
 
@@ -489,9 +489,21 @@ def render_top_nav():
 # ---------- SIDEBAR ----------
 def render_sidebar():
     with st.sidebar:
+        current = st.session_state.get("page", "home")
+
+        # Branding logo at top
         st.image("https://upload.wikimedia.org/wikipedia/commons/c/c8/FURECast_SPLG.png", width='stretch')
 
-        current = st.session_state.get("page", "home")
+        # Show GBR architecture diagram only on the GBR Model Details page
+        if current == "gbr_details":
+            gbr_img_path = os.path.join(
+                os.path.dirname(__file__),
+                "pred_model",
+                "models",
+                "GBR_architecture_diagram.png",
+            )
+            if os.path.isfile(gbr_img_path):
+                st.image(gbr_img_path, caption="GBR Model Architecture", use_container_width=True)
 
         if current in ("home", "performance"):
             st.sidebar.header("Chart Filters")
@@ -1489,19 +1501,7 @@ def _get_gbr_hyperparameter_definitions():
 def render_gbr_model_details_page():
     """Render detailed information about the GBR model features and hyperparameters."""
     st.markdown('<p class="main-header">GBR Model Details</p>', unsafe_allow_html=True)
-    st.markdown("Explore the engineered features and GradientBoostingRegressor hyperparameters used by the SPLG prediction model.")
-
-    # Architecture diagram
-    img_path = os.path.join(
-        os.path.dirname(__file__),
-        "pred_model",
-        "models",
-        "GBR_architecture_diagram.png",
-    )
-    if os.path.isfile(img_path):
-        st.image(img_path, caption="GBR Model Architecture Overview", use_container_width=True)
-    else:
-        st.info("GBR architecture diagram not found at expected path.")
+    st.markdown("Explore the engineered features and GradientBoostingRegressor hyperparameters used by the FURECast SPLG prediction model.")
 
     st.markdown("---")
 
@@ -1544,6 +1544,16 @@ def render_gbr_model_details_page():
 
         st.dataframe(display_features, use_container_width=True, hide_index=True)
 
+        # Download CSV for features table
+        csv_bytes = display_features.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "Download Features CSV",
+            csv_bytes,
+            file_name="gbr_model_features.csv",
+            mime="text/csv",
+            key="gbr_features_download",
+        )
+
     st.markdown("---")
 
     # ----- Hyperparameter Definitions Table -----
@@ -1566,6 +1576,16 @@ def render_gbr_model_details_page():
         else:
             display_hyper = hyper_df
         st.dataframe(display_hyper, use_container_width=True, hide_index=True)
+
+        # Download CSV for hyperparameters table
+        hyper_csv_bytes = display_hyper.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "Download Hyperparameters CSV",
+            hyper_csv_bytes,
+            file_name="gbr_hyperparameters.csv",
+            mime="text/csv",
+            key="gbr_hyperparams_download",
+        )
 
     st.markdown("---")
     if st.button("Back to Dashboard", key="back_from_gbr_details"):
