@@ -191,17 +191,13 @@ st.markdown("""
         color: var(--app-text-primary) !important;
     }
 
-    /* Make nav tiles respond to theme variables so they remain readable */
-    :root { --nav-bg: #f6f8fb; --nav-text: #0b0d10; --nav-border: rgba(15,23,42,0.06); }
+    /* Keep basic nav layout rules here, but let render_top_nav define colors. */
     section[data-testid='stHorizontalBlock'] > div div button,
     .nav-tile {
-        background: var(--nav-bg) !important;
-        color: var(--nav-text) !important;
         border-radius: 10px !important;
         padding: 0 18px !important;
         font-weight: 700 !important;
         font-size: 15px !important;
-        border: 2px solid var(--nav-border) !important;
         text-align: center !important;
         cursor: pointer !important;
         display: block !important;
@@ -214,18 +210,6 @@ st.markdown("""
         overflow: hidden !important;
         text-overflow: ellipsis !important;
         box-sizing: border-box !important;
-    }
-
-    /* Hover and active states (keep small shadow) */
-    section[data-testid='stHorizontalBlock'] > div div button:hover,
-    .nav-tile:hover { box-shadow: 0 2px 6px rgba(0,0,0,0.04) !important; }
-
-    .nav-active,
-    section[data-testid='stHorizontalBlock'] > div div button.nav-active {
-        background: var(--nav-bg) !important;
-        color: var(--nav-text) !important;
-        border: 2px solid var(--nav-border) !important;
-        box-shadow: none !important;
     }
 
     .feature-item { display: flex; justify-content: space-between; padding: 0.5rem; border-bottom: 1px solid #eee; }
@@ -325,7 +309,24 @@ def render_top_nav():
     css = f"""
     <style>
     /* Unified light-style nav tiles: light background, dark text, uniform height */
-    :root {{ --nav-bg: #f6f8fb; --nav-text: #0b0d10; --nav-border: rgba(15,23,42,0.06); --nav-active-bg: #eaf6ff; --nav-accent: #f5f7f9; }}
+    :root {{
+        --nav-bg: #f6f8fb;
+        --nav-text: #0b0d10;
+        --nav-border: rgba(15,23,42,0.06);
+        --nav-active-bg: #eaf6ff;
+        --nav-accent: #f5f7f9;
+        --nav-home-bg: #0b5ed7;
+        --nav-home-text: #ffffff;
+    }}
+
+    html[data-theme='dark'], body[data-theme='dark'] {{
+        --nav-bg: #0f1720;
+        --nav-text: #ffffff;
+        --nav-border: rgba(255,255,255,0.12);
+        --nav-active-bg: #111827;
+        --nav-home-bg: #2563eb;   /* slightly brighter blue on dark */
+        --nav-home-text: #f9fafb;
+    }}
 
     section[data-testid='stHorizontalBlock'] > div div button,
     .nav-tile {{
@@ -377,90 +378,8 @@ def render_top_nav():
     </style>
     """
 
-    # Compute which nav button (by position) is active so we can target it with CSS
-    try:
-        active_idx = next(i + 1 for i, (_, k) in enumerate(nav_items) if k == current)
-    except StopIteration:
-        active_idx = 1
-
-    # Update CSS to style the active button (position-based) so all nav items are rendered
-    # as Streamlit buttons (identical DOM) and only their colors change when active.
-    # Active styling: only change background color to accent and text to white
-    # Target the nth column's button (columns render as sibling divs). Using
-    # the column-level nth-child ensures we select the correct button even when
-    # Streamlit nests extra wrappers inside each column div.
-        css_active = css + f"\n<style>section[data-testid='stHorizontalBlock'] > div > div:nth-child({active_idx}) button {{ background: #ffffff !important; color: var(--nav-text) !important; border: 2px solid var(--nav-border) !important; border-radius:12px !important; box-shadow: 0 2px 6px rgba(0,0,0,0.04) !important; }}</style>"
-        st.markdown(css_active, unsafe_allow_html=True)
-
-        # Some Streamlit versions wrap column content with extra divs; to be robust
-        # add a tiny client-side script that locates the active button and forces
-        # the active styling. It first tries to match by visible label text, then
-        # falls back to the nth-column approach.
-        try:
-                active_label = next(lbl for lbl, k in nav_items if k == current)
-        except StopIteration:
-                active_label = None
-
-        # Escape label for JS string literal
-        safe_label = (active_label or '').replace("\\", "\\\\").replace("'", "\\'")
-
-        js = f"""
-        <script>
-        (function(){{
-            function applyByLabel(lbl){{
-                try {{
-                    var buttons = document.querySelectorAll("section[data-testid='stHorizontalBlock'] button");
-                    if(!buttons || buttons.length === 0) return false;
-                    for(var i=0;i<buttons.length;i++){{
-                        var b = buttons[i];
-                        var txt = (b.innerText || b.textContent || '').trim();
-                        if(!txt) continue;
-                        if(txt === lbl){{
-                            b.style.background = '#ffffff';
-                            var navText = getComputedStyle(document.documentElement).getPropertyValue('--nav-text') || '#0b0d10';
-                            b.style.color = navText.trim();
-                            b.style.border = '2px solid rgba(15,23,42,0.06)';
-                            b.style.borderRadius = '12px';
-                            b.style.boxShadow = '0 2px 6px rgba(0,0,0,0.04)';
-                            return true;
-                        }}
-                    }}
-                }} catch(e){{return false;}}
-                return false;
-            }}
-
-            function applyByIndex(){{
-                try {{
-                    var cols = document.querySelectorAll("section[data-testid='stHorizontalBlock'] > div > div");
-                    var idx = {active_idx} - 1;
-                    if(!cols || cols.length === 0) return false;
-                    var target = cols[idx];
-                    if(!target) return true;
-                    var btn = target.querySelector("button");
-                    if(!btn) return false;
-                    btn.style.background = '#ffffff';
-                    var navText = getComputedStyle(document.documentElement).getPropertyValue('--nav-text') || '#0b0d10';
-                    btn.style.color = navText.trim();
-                    btn.style.border = '2px solid rgba(15,23,42,0.06)';
-                    btn.style.borderRadius = '12px';
-                    btn.style.boxShadow = '0 2px 6px rgba(0,0,0,0.04)';
-                    return true;
-                }} catch(e){{return false;}}
-            }}
-
-            var tries = 0;
-            var t = setInterval(function(){{
-                var done = false;
-                // try label match first
-                if('{safe_label}') done = applyByLabel('{safe_label}');
-                // fallback to index
-                if(!done) done = applyByIndex();
-                if(done || ++tries > 40) clearInterval(t);
-            }}, 100);
-        }})();
-        </script>
-        """
-        st.markdown(js, unsafe_allow_html=True)
+    # Simple CSS only: no JS-based overrides for active nav styling.
+    st.markdown(css, unsafe_allow_html=True)
 
     # Render each nav item as a Streamlit button so DOM is consistent and size doesn't change
     for (base_label, key), col in zip(nav_items, cols):
@@ -474,11 +393,26 @@ def render_top_nav():
                 label = "Home (Pro, click for Lite)"
                 next_mode = "Lite"
 
-            clicked = col.button(label, key=f"topnav_{key}", use_container_width=True)
-            if clicked:
+            # Use a distinct, theme-aware style for the Home button
+            home_btn = col.button(label, key=f"topnav_{key}", use_container_width=True)
+            if home_btn:
                 st.session_state.mode = next_mode
                 st.session_state.page = "home"
                 safe_rerun()
+
+            # Inject a small CSS snippet to recolor the rendered Home button only
+            st.markdown(
+                """
+                <style>
+                section[data-testid='stHorizontalBlock'] > div div:first-child button {
+                    background: var(--nav-home-bg) !important;
+                    color: var(--nav-home-text) !important;
+                    border-color: rgba(15,23,42,0.15) !important;
+                }
+                </style>
+                """,
+                unsafe_allow_html=True,
+            )
         else:
             clicked = col.button(base_label, key=f"topnav_{key}", use_container_width=True)
             if clicked:
@@ -507,6 +441,17 @@ def render_sidebar():
                 st.image(gbr_img_path, caption="GBR Model Architecture", use_container_width=True)
 
         if current in ("home", "performance"):
+            st.markdown("### ℹ️ About FUREcast")
+            st.markdown("""
+            Interactive dashboard showcasing SPLG ETF analysis with GradientBoostingRegressor and LLM orchestration.
+            """)
+            with st.expander("Data Sources", expanded=False):
+                st.markdown("- SPLG historical data (2005-2025)\n- Sector ETF data\n- Technical indicators\n- Risk metrics")
+            with st.expander("Agent Architecture", expanded=False):
+                st.markdown("1. User Query\n2. LLM Router\n3. Tool Planner\n4. Tool Executor\n5. Answer Composer\n6. UI Renderer")
+            # st.markdown('<div class="disclaimer">⚠️ <strong>Educational Use Only</strong><br>Not financial advice.</div>', unsafe_allow_html=True)
+
+            st.markdown("---")
             st.sidebar.header("Chart Filters")
             st.session_state.metric = st.selectbox(
                 "Select Price Metric",
@@ -538,17 +483,6 @@ def render_sidebar():
             # Convert back to Timestamp for consistency
             st.session_state.start_date = pd.to_datetime(st.session_state.start_date)
             st.session_state.end_date = pd.to_datetime(st.session_state.end_date)
-
-            st.markdown("---")
-            st.markdown("### ℹ️ About FUREcast")
-            st.markdown("""
-            Interactive dashboard showcasing SPLG ETF analysis with GradientBoostingRegressor and LLM orchestration.
-            """)
-            with st.expander("Data Sources", expanded=False):
-                st.markdown("- SPLG historical data (2005-2025)\n- Sector ETF data\n- Technical indicators\n- Risk metrics")
-            with st.expander("Agent Architecture", expanded=False):
-                st.markdown("1. User Query\n2. LLM Router\n3. Tool Planner\n4. Tool Executor\n5. Answer Composer\n6. UI Renderer")
-            st.markdown('<div class="disclaimer">⚠️ <strong>Educational Use Only</strong><br>Not financial advice.</div>', unsafe_allow_html=True)
         else:
             # Compact sidebar for Glossary or other pages where filters are not needed
             st.markdown("### ℹ️ About FUREcast")
@@ -817,10 +751,8 @@ def render_lite_mode():
     st.info("""
     **💡 How to Use This Tool:**
     1. Review model prediction  
-    2. Check confidence score  
-    3. Examine feature influence  
-    4. Compare with recent price trends  
-    *Educational use only.*
+    2. Examine feature influence  
+    3. Compare with recent price trends  
     """)
 
 
@@ -887,8 +819,9 @@ def render_pro_mode():
             "Is now a good time to invest in SPLG?",
             "Which sectors look stable this quarter?",
             "Compare Technology vs Utilities performance",
+            "Show me the top holdings in SPLG",
             "What influenced today's prediction?",
-            "Show me the top holdings in SPLG"
+            "What sectors have the highest risk?"
         ]
         cols = st.columns(2)
         for i, example in enumerate(examples):
