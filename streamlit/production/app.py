@@ -541,12 +541,11 @@ def render_sidebar():
             st.markdown("---")
             st.markdown("### ℹ️ About FUREcast")
             st.markdown("""
-            Demo showcasing SPLG ETF analysis with GradientBoostingRegressor and LLM orchestration.
-            All data and predictions are simulated.
+            Interactive dashboard showcasing SPLG ETF analysis with GradientBoostingRegressor and LLM orchestration.
             """)
-            with st.expander("Data Sources (Simulated)", expanded=False):
+            with st.expander("Data Sources", expanded=False):
                 st.markdown("- SPLG historical data (2005-2025)\n- Sector ETF data\n- Technical indicators\n- Risk metrics")
-            with st.expander("Architecture", expanded=False):
+            with st.expander("Agent Architecture", expanded=False):
                 st.markdown("1. User Query\n2. LLM Router\n3. Tool Planner\n4. Tool Executor\n5. Answer Composer\n6. UI Renderer")
             st.markdown('<div class="disclaimer">⚠️ <strong>Educational Use Only</strong><br>Not financial advice.</div>', unsafe_allow_html=True)
         else:
