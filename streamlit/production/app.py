@@ -308,6 +308,7 @@ def render_top_nav():
     # Shortened labels so they remain single-line and neat
     nav_items = [
         ("Home", "home"),
+        ("GBR Model Details", "gbr_details"),
         ("Performance", "performance"),
         ("Glossary", "glossary"),
     ]
@@ -488,9 +489,21 @@ def render_top_nav():
 # ---------- SIDEBAR ----------
 def render_sidebar():
     with st.sidebar:
+        current = st.session_state.get("page", "home")
+
+        # Branding logo at top
         st.image("https://upload.wikimedia.org/wikipedia/commons/c/c8/FURECast_SPLG.png", width='stretch')
 
-        current = st.session_state.get("page", "home")
+        # Show GBR architecture diagram only on the GBR Model Details page
+        if current == "gbr_details":
+            gbr_img_path = os.path.join(
+                os.path.dirname(__file__),
+                "pred_model",
+                "models",
+                "GBR_architecture_diagram.png",
+            )
+            if os.path.isfile(gbr_img_path):
+                st.image(gbr_img_path, caption="GBR Model Architecture", use_container_width=True)
 
         if current in ("home", "performance"):
             st.sidebar.header("Chart Filters")
@@ -1214,6 +1227,11 @@ def main():
         render_glossary_page()
         return
 
+    # NEW: route GBR model details page
+    if st.session_state.page == "gbr_details":
+        render_gbr_model_details_page()
+        return
+
     if st.session_state.mode == 'Lite':
         render_lite_mode()
     else:
@@ -1385,6 +1403,192 @@ def render_performance_page_dynamic():
         st.error(f"Could not generate plots dynamically: {e}")
 
     if st.button("Back to Dashboard", key="back_from_perf"):
+        st.session_state.page = "home"
+        safe_rerun()
+
+
+def _load_feature_definitions_from_markdown():
+    """Load feature definitions from DATA_DICTIONARY.md into a dict[name] -> description.
+
+    Parses the Column Index markdown table and returns only the column name and description.
+    """
+    md_path = os.path.join(
+        os.path.dirname(__file__),
+        "..",
+        "..",
+        "wrangling",
+        "pred_model_feature_engineering",
+        "DATA_DICTIONARY.md",
+    )
+    # Fallback when running from repo root layout (e.g., testing contexts)
+    if not os.path.isfile(md_path):
+        md_path = os.path.join(
+            os.path.dirname(__file__),
+            "..",
+            "..",
+            "wrangling",
+            "pred_model_feature_engineering",
+            "DATA_DICTIONARY.md",
+        )
+
+    mapping = {}
+    try:
+        with open(md_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+        in_table = False
+        for line in lines:
+            if line.strip().startswith("| 1 | date "):
+                in_table = True
+            if not in_table:
+                continue
+            if not line.strip() or line.lstrip().startswith("---"):
+                continue
+            parts = [p.strip() for p in line.strip().split("|")]
+            if len(parts) < 6:
+                continue
+            # parts: [ '', '#', 'Column Name', 'Data Type', 'Category', 'Description', '' ]
+            try:
+                feature_name = parts[2]
+                description = parts[5]
+            except IndexError:
+                continue
+            if feature_name and feature_name != "Column Name" and feature_name not in mapping:
+                mapping[feature_name] = description
+    except Exception:
+        # Fail silently; caller will handle missing descriptions gracefully.
+        mapping = {}
+    return mapping
+
+
+def _load_feature_importance():
+    """Load feature importance CSV used by the current GBR model.
+
+    Returns a DataFrame with columns ['feature', 'importance'] sorted by importance desc.
+    """
+    csv_path = os.path.join(
+        os.path.dirname(__file__),
+        "pred_model",
+        "models",
+        "feature_importance.csv",
+    )
+    try:
+        df = pd.read_csv(csv_path)
+        if {"feature", "importance"}.issubset(df.columns):
+            df = df.sort_values("importance", ascending=False).reset_index(drop=True)
+            return df
+    except Exception:
+        pass
+    return pd.DataFrame(columns=["feature", "importance"])
+
+
+def _get_gbr_hyperparameter_definitions():
+    """Definitions for the GradientBoostingRegressor hyperparameters used in model_metadata.json."""
+    return {
+        "learning_rate": "Step size shrinkage applied to each tree's contribution; smaller values require more trees.",
+        "max_depth": "Maximum depth of individual regression trees that make up the ensemble.",
+        "max_features": "Number of features considered when looking for the best split (e.g., 'sqrt' = square root of total features).",
+        "min_samples_leaf": "Minimum number of samples required to be at a leaf (terminal) node.",
+        "min_samples_split": "Minimum number of samples required to split an internal node.",
+        "n_estimators": "Number of boosting stages (trees) in the ensemble.",
+        "n_iter_no_change": "Number of iterations with no improvement on the validation loss before early stopping.",
+        "random_state": "Seed used by the random number generator for reproducible model training.",
+        "subsample": "Fraction of training samples used for fitting each base learner; values <1.0 introduce stochasticity.",
+        "tol": "Minimum loss improvement required to continue training when early stopping is enabled.",
+        "validation_fraction": "Proportion of training data set aside as validation set for early stopping.",
+    }
+
+
+def render_gbr_model_details_page():
+    """Render detailed information about the GBR model features and hyperparameters."""
+    st.markdown('<p class="main-header">GBR Model Details</p>', unsafe_allow_html=True)
+    st.markdown("Explore the engineered features and GradientBoostingRegressor hyperparameters used by the FURECast SPLG prediction model.")
+
+    st.markdown("---")
+
+    # Load data
+    feat_imp_df = _load_feature_importance()
+    feat_defs = _load_feature_definitions_from_markdown()
+    hyper_defs = _get_gbr_hyperparameter_definitions()
+
+    # Unified search across both tables
+    search_query = st.text_input(
+        "Search features or hyperparameters:",
+        value="",
+        key="gbr_details_search",
+        help="Filters both Model Features and Hyperparameters tables."
+    )
+
+    # ----- Model Features Table -----
+    st.markdown("### Model Features")
+    if feat_imp_df.empty:
+        st.warning("Feature importance data not available.")
+    else:
+        features_table = feat_imp_df.copy()
+        features_table["Definition"] = features_table["feature"].map(feat_defs).fillna("(No definition found in data dictionary)")
+        features_table.rename(columns={
+            "feature": "Feature",
+            "importance": "Current Prediction Importance",
+        }, inplace=True)
+        # Convert importance to percentage string for display
+        features_table["Current Prediction Importance"] = features_table["Current Prediction Importance"].astype(float)
+        features_table["Current Prediction Importance"] = features_table["Current Prediction Importance"].map(lambda x: f"{x:.2%}")
+
+        if search_query:
+            mask = features_table.apply(
+                lambda row: row.astype(str).str.contains(search_query, case=False, na=False).any(),
+                axis=1,
+            )
+            display_features = features_table[mask].reset_index(drop=True)
+        else:
+            display_features = features_table
+
+        st.dataframe(display_features, use_container_width=True, hide_index=True)
+
+        # Download CSV for features table
+        csv_bytes = display_features.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "Download Features CSV",
+            csv_bytes,
+            file_name="gbr_model_features.csv",
+            mime="text/csv",
+            key="gbr_features_download",
+        )
+
+    st.markdown("---")
+
+    # ----- Hyperparameter Definitions Table -----
+    st.markdown("### GBR Hyperparameters")
+    if not hyper_defs:
+        st.warning("No hyperparameter definitions available.")
+    else:
+        hyper_df = pd.DataFrame(
+            [
+                {"Hyperparameter": name, "Definition": desc}
+                for name, desc in hyper_defs.items()
+            ]
+        )
+        if search_query:
+            mask = hyper_df.apply(
+                lambda row: row.astype(str).str.contains(search_query, case=False, na=False).any(),
+                axis=1,
+            )
+            display_hyper = hyper_df[mask].reset_index(drop=True)
+        else:
+            display_hyper = hyper_df
+        st.dataframe(display_hyper, use_container_width=True, hide_index=True)
+
+        # Download CSV for hyperparameters table
+        hyper_csv_bytes = display_hyper.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "Download Hyperparameters CSV",
+            hyper_csv_bytes,
+            file_name="gbr_hyperparameters.csv",
+            mime="text/csv",
+            key="gbr_hyperparams_download",
+        )
+
+    st.markdown("---")
+    if st.button("Back to Dashboard", key="back_from_gbr_details"):
         st.session_state.page = "home"
         safe_rerun()
 
