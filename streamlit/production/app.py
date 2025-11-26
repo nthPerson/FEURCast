@@ -314,7 +314,8 @@ def render_top_nav():
     ]
     current = st.session_state.get("page", "home")
 
-    cols = st.columns([1] * len(nav_items) + [2])
+    # Single full-width row: nav buttons span the page like the headline ribbon
+    cols = st.columns([1] * len(nav_items))
 
     # Inline CSS for nav tiles (active + inactive)
     active_color = "#f4f6f8"  # light grey background
@@ -462,14 +463,11 @@ def render_top_nav():
         st.markdown(js, unsafe_allow_html=True)
 
     # Render each nav item as a Streamlit button so DOM is consistent and size doesn't change
-    for (label, key), col in zip(nav_items, cols[:-1]):
+    for (label, key), col in zip(nav_items, cols):
         clicked = col.button(label, key=f"topnav_{key}", use_container_width=True)
         if clicked:
             st.session_state.page = key
             safe_rerun()
-
-    # Right column intentionally left empty; mode control is under the Home tile.
-    mode_col = cols[-1]
 
     # If the Home button is active, render the Mode radio beneath the first column
     if current == 'home':
@@ -734,7 +732,7 @@ def render_macro_and_sentiment_tiles(unemployment_rate, public_debt_pct, un_stat
         un_display = f"{unemployment_rate:.1f}%" if unemployment_rate is not None else "N/A"
         st.markdown(
             f"<div style='{panel_style}'>"
-            f"<div style='display:flex; align-items:center; gap:8px; font-size:0.95rem;'>"
+            f"<div style='display:flex; align-items:center; justify-content:center; gap:8px; font-size:0.95rem; text-align:center;'>"
             f"<span style='font-weight:600; color:#0b0d10; opacity:0.95;'>Unemployment Rate</span>"
             f"<span style='font-weight:700; color:#0b0d10;'>{un_display}</span>"
             f"<span style='font-weight:700; color:{un_color};'>{un_status}</span>"
@@ -746,7 +744,7 @@ def render_macro_and_sentiment_tiles(unemployment_rate, public_debt_pct, un_stat
         debt_display = f"{public_debt_pct:.1f}%" if public_debt_pct is not None else "N/A"
         st.markdown(
             f"<div style='{panel_style}'>"
-            f"<div style='display:flex; align-items:center; gap:8px; font-size:0.95rem;'>"
+            f"<div style='display:flex; align-items:center; justify-content:center; gap:8px; font-size:0.95rem; text-align:center;'>"
             f"<span style='font-weight:600; color:#0b0d10; opacity:0.95;'>Public Debt (% of GDP)</span>"
             f"<span style='font-weight:700; color:#0b0d10;'>{debt_display}</span>"
             f"<span style='font-weight:700; color:{debt_color};'>{debt_status}</span>"
