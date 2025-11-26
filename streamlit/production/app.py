@@ -142,7 +142,7 @@ st.markdown("""
     .main-header, p.main-header { font-size: 2.5rem; font-weight: bold; color: #2E86AB; margin-bottom: 0.5rem; }
     .sub-header, p.sub-header { font-size: 1.2rem; color: #666; margin-bottom: 2rem; }
     /* Chart-style header - ensure block-level and stacking so it remains visible above nearby panels */
-    .chart-header, p.chart-header, div.chart-header { font-size: 1.20rem; font-weight: 800; margin: 0.6rem 0; display:block; position:relative; z-index:50; }
+    .chart-header, p.chart-header, div.chart-header { font-size: 1.80rem; font-weight: 800; margin: 0.6rem 0; display:block; position:relative; z-index:50; }
 
     /* Provide theme-aware CSS variables for nav and header colors so other rules can reuse them */
     html[data-theme='dark'], body[data-theme='dark'] {
