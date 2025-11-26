@@ -463,24 +463,27 @@ def render_top_nav():
         st.markdown(js, unsafe_allow_html=True)
 
     # Render each nav item as a Streamlit button so DOM is consistent and size doesn't change
-    for (label, key), col in zip(nav_items, cols):
-        clicked = col.button(label, key=f"topnav_{key}", use_container_width=True)
-        if clicked:
-            st.session_state.page = key
-            safe_rerun()
+    for (base_label, key), col in zip(nav_items, cols):
+        # For the Home button only, show mode and hint text, and toggle Lite/Pro
+        if key == "home":
+            current_mode = st.session_state.get("mode", "Lite")
+            if current_mode == "Lite":
+                label = "Home (Lite, click for Pro)"
+                next_mode = "Pro"
+            else:
+                label = "Home (Pro, click for Lite)"
+                next_mode = "Lite"
 
-    # If the Home button is active, render the Mode radio beneath the first column
-    if current == 'home':
-        # Put the Mode control under the first column so layout is predictable
-        cols[0].markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
-        cols[0].radio(
-            "Mode",
-            options=['Lite', 'Pro'],
-            key="topnav_mode",
-            index=0 if st.session_state.get("mode", "Lite") == 'Lite' else 1,
-            on_change=_sidebar_mode_changed,
-            label_visibility='collapsed'
-        )
+            clicked = col.button(label, key=f"topnav_{key}", use_container_width=True)
+            if clicked:
+                st.session_state.mode = next_mode
+                st.session_state.page = "home"
+                safe_rerun()
+        else:
+            clicked = col.button(base_label, key=f"topnav_{key}", use_container_width=True)
+            if clicked:
+                st.session_state.page = key
+                safe_rerun()
 
 
 
