@@ -99,6 +99,7 @@ from simulator import (
     get_sector_summary,
     create_feature_importance_chart,
     create_sector_comparison_chart,
+    get_holdings_top_n,
 )
 from llm_interface import (
     route_query,
@@ -904,7 +905,34 @@ def render_pro_mode():
         
         viz_plan = plan.get('visualization') or {}
         viz_type = viz_plan.get('type', 'price')
-        
+
+        # If the LLM explicitly requested a table visualization (e.g. top holdings),
+        # honor that first by rendering a DataFrame derived from holdings data.
+        if viz_type == 'table':
+            specs = viz_plan.get('specs', {}) or {}
+            requested_columns = specs.get('columns') or []
+
+            try:
+                # Default to top 20 holdings; this can be tuned later or
+                # extended to read a "top_n" field from specs.
+                holdings_df = get_holdings_top_n(20)
+
+                # Reorder / subset according to the plan's column list when possible.
+                if requested_columns:
+                    cols_available = [c for c in requested_columns if c in holdings_df.columns]
+                    if cols_available:
+                        display_df = holdings_df[cols_available]
+                    else:
+                        display_df = holdings_df
+                else:
+                    display_df = holdings_df
+
+                st.markdown("**Top SPLG Holdings (from plan)**")
+                st.dataframe(display_df, use_container_width=True, hide_index=True)
+            except Exception as e:
+                st.warning(f"Unable to render requested table visualization: {e}")
+
+        # Keyword-based fallbacks for additional visual context
         if 'holding' in query.lower() or 'stock' in query.lower() or 'company' in query.lower():
             # Show detailed holdings treemap
             st.markdown("**SPLG Holdings Drill-Down**")
