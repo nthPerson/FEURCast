@@ -660,26 +660,26 @@ def render_latest_headlines_strip():
     )
 
 
-def render_lite_mode():
-    # Headlines strip now rendered globally at top of page
-    # =============================
-    # Macro & Sentiment Dashboard (FRED + Sentiment Combined)
-    # =============================
+def compute_macro_and_sentiment():
+    """Fetch macro series and compute statuses/colors once per run.
+
+    Returns unemployment_rate, public_debt_pct, un_status, un_color,
+    debt_status, debt_color. Coloring thresholds mirror the original
+    Lite/Pro implementations.
+    """
     import requests
-    # Use env/secrets-provided key; if missing, skip FRED calls gracefully
     base_url = "https://api.stlouisfed.org/fred/series/observations"
 
     if not FRED_KEY:
         unemployment_rate = None
         public_debt_pct = None
     else:
-        # --- Fetch Unemployment Rate (UNRATE) ---
         params_un = {
             "series_id": "UNRATE",
             "api_key": FRED_KEY,
             "file_type": "json",
             "sort_order": "desc",
-            "limit": 1
+            "limit": 1,
         }
         try:
             resp_un = requests.get(base_url, params=params_un, timeout=5)
@@ -688,13 +688,12 @@ def render_lite_mode():
         except Exception:
             unemployment_rate = None
 
-        # --- Fetch Public Debt to GDP Ratio (GFDEGDQ188S) ---
         params_debt = {
             "series_id": "GFDEGDQ188S",
             "api_key": FRED_KEY,
             "file_type": "json",
             "sort_order": "desc",
-            "limit": 1
+            "limit": 1,
         }
         try:
             resp_debt = requests.get(base_url, params=params_debt, timeout=5)
@@ -703,71 +702,63 @@ def render_lite_mode():
         except Exception:
             public_debt_pct = None
 
-    # --- Threshold Logic ---
     def indicator_status(value, good_max):
         if value is None:
             return "N/A", "grey"
         if value <= good_max:
-            return "Acceptable", "green"
+            return "Acceptable", "#0b8a3e"
         else:
-            return "Bad", "red"
+            return "Bad", "#d62828"
 
-    un_status, un_color = indicator_status(unemployment_rate, 6.0) # Unemployment: 0 to 6% acceptable (the closer to 0 the better) 6.1% and above BAD
-    debt_status, debt_color = indicator_status(public_debt_pct, 70.0) #Public Debt: 0 to 70% acceptable (the closer to 0 the better) 71% and above BAD
+    un_status, un_color = indicator_status(unemployment_rate, 6.0)
+    debt_status, debt_color = indicator_status(public_debt_pct, 70.0)
+    return unemployment_rate, public_debt_pct, un_status, un_color, debt_status, debt_color
 
+def render_macro_and_sentiment_tiles(unemployment_rate, public_debt_pct, un_status, un_color, debt_status, debt_color):
+    """Render compact Macro & Sentiment tiles used globally below headlines.
 
-    # --- Display Combined Indicators ---
-    header_with_info('Macro & Sentiment Dashboard', 'High-level macro indicators (e.g., unemployment, public debt) combined with simple sentiment cues. Thresholds and colors are illustrative for teaching purposes.')
-
-    # Use equal-width columns with a slightly larger gap and full-width panels
-    col1, col2 = st.columns([1, 1], gap="large")
+    Values and colors are passed in so we can reuse the same data
+    for all pages without recomputing. Coloring comes from the
+    shared indicator_status logic and must remain unchanged.
+    """
+    # Smaller typography / padding so tiles are visually de-emphasized
+    col1, col2 = st.columns([1, 1], gap="small")
 
     panel_style = (
-        "padding:12px; border-radius:10px; "
-        "background:linear-gradient(180deg,#f8f9fa,#eef2f5); "
-        "border:1px solid rgba(0,0,0,0.06); box-shadow:0 2px 8px rgba(0,0,0,0.06); "
-        "width:100%; box-sizing:border-box;"
+        "padding:8px; border-radius:10px; "
+        "background:linear-gradient(180deg,#fbfdff,#f1f6fb); "
+        "border:1px solid rgba(15,23,42,0.06); width:100%; box-sizing:border-box; color:#0b0d10;"
     )
 
     with col1:
-        # Show unemployment with status badge using computed color (stretches full column width)
         un_display = f"{unemployment_rate:.1f}%" if unemployment_rate is not None else "N/A"
-        # stronger, explicit dark text for visibility in Streamlit dark theme
-        panel_style_lite = (
-            "padding:14px; border-radius:12px; "
-            "background:linear-gradient(180deg,#fbfdff,#f1f6fb); "
-            "border:1px solid rgba(15,23,42,0.06); width:100%; box-sizing:border-box; color:#0b0d10;"
-        )
         st.markdown(
-            f"<div style='{panel_style_lite}'>"
-            f"<div style='font-size:1.0rem; font-weight:700; color:#0b0d10; opacity:0.95;'>Unemployment Rate</div>"
-            f"<div style='font-size:1.6rem; margin-top:6px; color:#0b0d10; font-weight:800;'>{un_display}</div>"
-            f"<div style='margin-top:10px; color:{un_color}; font-weight:800;'>{un_status}</div>"
-            f"</div>",
+            f"<div style='{panel_style}'>"
+            f"<div style='display:flex; align-items:center; gap:8px; font-size:0.95rem;'>"
+            f"<span style='font-weight:600; color:#0b0d10; opacity:0.95;'>Unemployment Rate</span>"
+            f"<span style='font-weight:700; color:#0b0d10;'>{un_display}</span>"
+            f"<span style='font-weight:700; color:{un_color};'>{un_status}</span>"
+            f"</div></div>",
             unsafe_allow_html=True,
         )
 
     with col2:
-        # Show public debt with status badge using computed color (stretches full column width)
         debt_display = f"{public_debt_pct:.1f}%" if public_debt_pct is not None else "N/A"
         st.markdown(
-            f"<div style='{panel_style_lite}'>"
-            f"<div style='font-size:1.0rem; font-weight:700; color:#0b0d10; opacity:0.95;'>Public Debt (% of GDP)</div>"
-            f"<div style='font-size:1.6rem; margin-top:6px; color:#0b0d10; font-weight:800;'>{debt_display}</div>"
-            f"<div style='margin-top:10px; color:{debt_color}; font-weight:800;'>{debt_status}</div>"
-            f"</div>",
+            f"<div style='{panel_style}'>"
+            f"<div style='display:flex; align-items:center; gap:8px; font-size:0.95rem;'>"
+            f"<span style='font-weight:600; color:#0b0d10; opacity:0.95;'>Public Debt (% of GDP)</span>"
+            f"<span style='font-weight:700; color:#0b0d10;'>{debt_display}</span>"
+            f"<span style='font-weight:700; color:{debt_color};'>{debt_status}</span>"
+            f"</div></div>",
             unsafe_allow_html=True,
         )
 
 
-    # --- Optional Styling ---
-    st.markdown("""
-    <style>[data-testid="stMetricValue"] {font-size: 1.4rem !important;}
-    [data-testid="stMetricLabel"] {color: #1c1c1c;}
-    </style>
-    """, unsafe_allow_html=True)
-    # Divider after Macro & Sentiment Dashboard to separate from core UI
-    st.markdown("---")
+
+def render_lite_mode():
+    # Lite mode now assumes macro & sentiment tiles have already been
+    # rendered globally near the top of the page.
     # =============================
     # 📈 Core UI: Header + Prediction
     # =============================
@@ -834,98 +825,7 @@ def render_lite_mode():
 
 # ---------- PRO MODE ----------
 def render_pro_mode():
-    # Headlines strip now rendered globally at top of page
-    # =============================
-    # Macro & Sentiment Dashboard (FRED + Sentiment Combined)
-    # =============================
-    import requests
-    base_url = "https://api.stlouisfed.org/fred/series/observations"
 
-    if not FRED_KEY:
-        unemployment_rate = None
-        public_debt_pct = None
-    else:
-        # --- Fetch Unemployment Rate (UNRATE) ---
-        params_un = {
-            "series_id": "UNRATE",
-            "api_key": FRED_KEY,
-            "file_type": "json",
-            "sort_order": "desc",
-            "limit": 1
-        }
-        try:
-            resp_un = requests.get(base_url, params=params_un, timeout=5)
-            data_un = resp_un.json().get("observations", [])
-            unemployment_rate = float(data_un[0].get("value", 0)) if data_un else None
-        except Exception:
-            unemployment_rate = None
-
-        # --- Fetch Public Debt to GDP Ratio (GFDEGDQ188S) ---
-        params_debt = {
-            "series_id": "GFDEGDQ188S",
-            "api_key": FRED_KEY,
-            "file_type": "json",
-            "sort_order": "desc",
-            "limit": 1
-        }
-        try:
-            resp_debt = requests.get(base_url, params=params_debt, timeout=5)
-            data_debt = resp_debt.json().get("observations", [])
-            public_debt_pct = float(data_debt[0].get("value", 0)) if data_debt else None
-        except Exception:
-            public_debt_pct = None
-    # =============================
-    # 📊 Macro & Sentiment Dashboard (Pro Mode)
-    # Render two summary tiles with explicit dark text so they are readable in Streamlit dark theme
-    # =============================
-
-    # Helper to compute status + color (same thresholds as Lite mode)
-    def indicator_status(value, good_max):
-        if value is None:
-            return "N/A", "grey"
-        if value <= good_max:
-            return "Acceptable", "#0b8a3e"
-        else:
-            return "Bad", "#d62828"
-
-    un_status, un_color = indicator_status(unemployment_rate, 6.0)
-    debt_status, debt_color = indicator_status(public_debt_pct, 70.0)
-
-    header_with_info('Macro & Sentiment Dashboard', 'High-level macro indicators (e.g., unemployment, public debt) combined with simple sentiment cues. Thresholds and colors are illustrative for teaching purposes.')
-
-    col1, col2 = st.columns([1, 1], gap="large")
-
-    # Panel style uses a light background with explicit dark text color to ensure readability
-    panel_style = (
-        "padding:14px; border-radius:12px; "
-        "background:linear-gradient(180deg,#fbfdff,#f1f6fb); "
-        "border:1px solid rgba(15,23,42,0.06); width:100%; box-sizing:border-box; color:#0b0d10;"
-    )
-
-    with col1:
-        un_display = f"{unemployment_rate:.1f}%" if unemployment_rate is not None else "N/A"
-        st.markdown(
-            f"<div style='{panel_style}'>"
-            f"<div style='font-size:1.0rem; font-weight:700; color:#0b0d10; opacity:0.95;'>Unemployment Rate</div>"
-            f"<div style='font-size:1.8rem; margin-top:8px; color:#0b0d10; font-weight:800;'>{un_display}</div>"
-            f"<div style='margin-top:10px; color:{un_color}; font-weight:800;'>{un_status}</div>"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
-
-    with col2:
-        debt_display = f"{public_debt_pct:.1f}%" if public_debt_pct is not None else "N/A"
-        st.markdown(
-            f"<div style='{panel_style}'>"
-            f"<div style='font-size:1.0rem; font-weight:700; color:#0b0d10; opacity:0.95;'>Public Debt (% of GDP)</div>"
-            f"<div style='font-size:1.8rem; margin-top:8px; color:#0b0d10; font-weight:800;'>{debt_display}</div>"
-            f"<div style='margin-top:10px; color:{debt_color}; font-weight:800;'>{debt_status}</div>"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
-
-    # Divider after Macro & Sentiment Dashboard to separate from core UI
-    st.markdown("---")
 
     # =============================
     # 📈 Core UI: Header + Prediction
@@ -1170,10 +1070,28 @@ def render_pro_mode():
 # ---------- MAIN ----------
 def main():
     initialize_session_state()
-    
-    # Top navigation sits above the main content (e.g., above Latest Market Headlines)
-    # Global latest headlines strip at very top of all pages (no heading)
+    # Top of page: headlines strip, then compact macro & sentiment tiles,
+    # then main navigation and sidebar.
     render_latest_headlines_strip()
+
+    (   unemployment_rate,
+		public_debt_pct,
+		un_status,
+		un_color,
+		debt_status,
+		debt_color,
+	) = compute_macro_and_sentiment()
+
+    render_macro_and_sentiment_tiles(
+		unemployment_rate,
+		public_debt_pct,
+		un_status,
+		un_color,
+		debt_status,
+		debt_color,
+	)
+
+    st.markdown("---")
 
     render_top_nav()
     render_sidebar()
