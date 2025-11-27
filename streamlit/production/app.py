@@ -453,7 +453,7 @@ def render_sidebar():
             # st.markdown('<div class="disclaimer">⚠️ <strong>Educational Use Only</strong><br>Not financial advice.</div>', unsafe_allow_html=True)
 
             st.markdown("---")
-            st.sidebar.header("Chart Filters")
+            st.sidebar.header("Price Chart Filters")
             st.session_state.metric = st.selectbox(
                 "Select Price Metric",
                 options=["Closing", "Opening", "Daily High", "Daily Low", "Daily Current"],
