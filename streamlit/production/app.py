@@ -444,7 +444,7 @@ def render_sidebar():
         if current in ("home", "performance"):
             st.markdown("### ℹ️ About FUREcast")
             st.markdown("""
-            Interactive dashboard showcasing SPLG ETF analysis with GradientBoostingRegressor and LLM orchestration.
+            Interactive dashboard showcasing SPLG (now SPYM) ETF analysis with GradientBoostingRegressor and LLM orchestration.
             """)
             with st.expander("Data Sources", expanded=False):
                 st.markdown("- SPLG historical data (2005-2025)\n- Sector ETF data\n- Technical indicators\n- Risk metrics")
