@@ -409,12 +409,6 @@ def render_sidebar():
         # Mode toggle button only when on the Home page
         if current == "home":
             current_mode = st.session_state.get("mode", "Lite")
-            # if current_mode == "Lite":
-            #     toggle_label = "Click Here for Pro Analytics"
-            #     next_mode = "Pro"
-            # else:
-            #     toggle_label = "Click Here for Lite Analytics"
-            #     next_mode = "Lite"
             if current_mode == "Lite":
                 toggle_label = "Click Here for Pro Mode 😎"
                 next_mode = "Pro"
@@ -444,9 +438,43 @@ def render_sidebar():
             Interactive dashboard showcasing SPLG (now SPYM) ETF analysis with GradientBoostingRegressor and LLM orchestration.
             """)
             with st.expander("Data Sources", expanded=False):
-                st.markdown("- SPLG historical data (2005-2025)\n- Sector ETF data\n- Technical indicators\n- Risk metrics")
-            with st.expander("Agent Architecture", expanded=False):
-                st.markdown("1. User Query\n2. LLM Router\n3. Tool Planner\n4. Tool Executor\n5. Answer Composer\n6. UI Renderer")
+                st.markdown("- SPLG/SPYM historical data (2005-2025)\n- Sector ETF data\n- Technical indicators\n- Risk metrics\n- Market events")
+            with st.expander("Prediction Model", expanded=False):
+                st.markdown("""
+                **Gradient Boosting Regressor (GBR)**
+                - Ensemble learning method combining multiple decision trees
+                - Trained on 100+ engineered features including technical indicators, sector ETF data, and market metrics
+                - Predicts next-day SPLG price movement
+                - Performance metrics available in Performance page
+                - Hyperparameters optimized via grid search with cross-validation
+                
+                **Key Features:**
+                - Historical price data (open, high, low, close, volume)
+                - Technical indicators (RSI, MACD, Bollinger Bands, etc.)
+                - Sector ETF performance metrics
+                - Market volatility measures
+                - Rolling statistics and momentum indicators
+                """)
+            with st.expander("Visualizations", expanded=False):
+                st.markdown("""
+                **Available Visualizations:**
+                - Historical Price Charts (Closing, Opening, High, Low, Current)
+                - Sector Risk Treemap (by volatility)
+                - Sector Holdings Drill-Down Treemap
+                - Feature Importance Chart
+                - Sector Comparison Chart
+                - Model Performance Metrics:
+                  - Prediction vs Actual
+                  - Residuals Analysis
+                  - Error Distribution
+                  - Training Progress
+                  - Cumulative Returns
+                  - Time Series Predictions
+                """)
+            with st.expander("Learning Agent Architecture", expanded=False):
+            # with st.expander("Agent Architecture", expanded=False):
+                st.markdown("1. User-Entered Query\n2. LLM Intent Router\n3. Tool Planner\n4. Tool Executor\n5. Answer Composer\n6. UI Rendering")
+                # st.markdown("1. User Query\n2. LLM Router\n3. Tool Planner\n4. Tool Executor\n5. Answer Composer\n6. UI Renderer")
             # st.markdown('<div class="disclaimer">⚠️ <strong>Educational Use Only</strong><br>Not financial advice.</div>', unsafe_allow_html=True)
 
             st.markdown("---")
@@ -808,8 +836,10 @@ def render_pro_mode():
     st.markdown("---")
     
     # Natural language query interface
-    header_with_info('💬 Ask FUREcast', 'Ask questions in natural language. Responses combine LLM-generated text with model outputs and visualizations — treat as educational commentary.')
-    st.markdown('<div class="sub-header">Enter your question about SPLG, sectors, risk, or market trends...</div>', unsafe_allow_html=True)
+    header_with_info('💬 Ask FUREcast - Learning Agent', 'Ask questions in natural language. Responses combine LLM-generated text with model outputs and visualizations — treat as educational commentary.')
+    # header_with_info('💬 Ask FUREcast', 'Ask questions in natural language. Responses combine LLM-generated text with model outputs and visualizations — treat as educational commentary.')
+    st.markdown('<div class="sub-header">Ask our Learning Agent questions about SPLG, sectors, risk, or market trends...</div>', unsafe_allow_html=True)
+    # st.markdown('<div class="sub-header">Enter your question about SPLG, sectors, risk, or market trends...</div>', unsafe_allow_html=True)
     
     # Example queries
     with st.expander("Example Queries"):
@@ -1050,7 +1080,9 @@ def main():
 		debt_color,
 	)
 
-    st.markdown("---")
+    # st.markdown("---")
+    st.markdown("\n")
+    st.markdown("\n")
 
     render_top_nav()
     render_sidebar()
