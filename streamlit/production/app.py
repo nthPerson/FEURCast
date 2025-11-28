@@ -1254,54 +1254,6 @@ def render_performance_page():
     st.markdown('<p class="chart-header">Financial Performance Metrics</p>', unsafe_allow_html=True)
     st.markdown("These metrics evaluate the model's performance from a trading/investment perspective.")
     
-    # Custom CSS for metrics tables - prevent wrapping in Metric and Value columns
-    st.markdown("""
-    <style>
-    .metrics-table {
-        width: 100%;
-        border-collapse: collapse;
-        margin: 1rem 0;
-    }
-    .metrics-table th, .metrics-table td {
-        border: 1px solid #ddd;
-        padding: 8px 12px;
-        text-align: left;
-        # color: #F8F9FA; # text color for both dark and light modes
-        # color: #1a1a1a; # works in both dark and light modes with this commented out. Don't think about it, just go with it.
-    }
-    .metrics-table th {
-        background-color: #f8f9fa;
-        font-weight: 600;
-        color: #1a1a1a;
-    }
-    .metrics-table .metric-col {
-        white-space: nowrap;
-        min-width: 200px;
-    }
-    .metrics-table .value-col {
-        white-space: nowrap;
-        min-width: 120px;
-        font-family: monospace;
-    }
-    .metrics-table .desc-col {
-        min-width: 300px;
-    }
-    /* Dark mode styles */
-    html[data-theme='dark'] .metrics-table th,
-    html[data-theme='dark'] .metrics-table td {
-        border-color: #334155;
-        color: #e2e8f0;
-    }
-    html[data-theme='dark'] .metrics-table th {
-        background-color: #1e293b;
-        color: #f1f5f9;
-    }
-    html[data-theme='dark'] .metrics-table td {
-        background-color: #0f172a;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-    
     # Load metrics from metrics.json
     metrics_path = os.path.join(os.path.dirname(__file__), "pred_model", "models", "metrics.json")
     financial_metrics_data = []
@@ -1346,26 +1298,9 @@ def render_performance_page():
                 })
             
             if financial_metrics_data:
-                # Build HTML table for better column width control
-                html_rows = ""
-                for row in financial_metrics_data:
-                    html_rows += f'<tr><td class="metric-col">{row["Metric"]}</td><td class="value-col">{row["Value"]}</td><td class="desc-col">{row["Description"]}</td></tr>'
-                
-                html_table = f"""
-                <table class="metrics-table">
-                    <thead>
-                        <tr>
-                            <th class="metric-col">Metric</th>
-                            <th class="value-col">Value</th>
-                            <th class="desc-col">Description</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {html_rows}
-                    </tbody>
-                </table>
-                """
-                st.markdown(html_table, unsafe_allow_html=True)
+                import pandas as pd
+                fin_df = pd.DataFrame(financial_metrics_data)
+                st.dataframe(fin_df, use_container_width=True, hide_index=True)
             else:
                 st.info("No financial metrics available in metrics.json.")
         else:
@@ -1426,26 +1361,9 @@ def render_performance_page():
                     })
             
             if regression_metrics_data:
-                # Build HTML table for better column width control
-                html_rows = ""
-                for row in regression_metrics_data:
-                    html_rows += f'<tr><td class="metric-col">{row["Metric"]}</td><td class="value-col">{row["Value"]}</td><td class="desc-col">{row["Description"]}</td></tr>'
-                
-                html_table = f"""
-                <table class="metrics-table">
-                    <thead>
-                        <tr>
-                            <th class="metric-col">Metric</th>
-                            <th class="value-col">Value</th>
-                            <th class="desc-col">Description</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {html_rows}
-                    </tbody>
-                </table>
-                """
-                st.markdown(html_table, unsafe_allow_html=True)
+                import pandas as pd
+                reg_df = pd.DataFrame(regression_metrics_data)
+                st.dataframe(reg_df, use_container_width=True, hide_index=True)
             else:
                 st.info("No regression metrics available in the test object.")
         else:
