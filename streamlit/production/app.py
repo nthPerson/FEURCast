@@ -477,7 +477,7 @@ def render_sidebar():
                 # st.markdown("1. User Query\n2. LLM Router\n3. Tool Planner\n4. Tool Executor\n5. Answer Composer\n6. UI Renderer")
             # st.markdown('<div class="disclaimer">⚠️ <strong>Educational Use Only</strong><br>Not financial advice.</div>', unsafe_allow_html=True)
 
-            st.markdown("---")
+            # st.markdown("---")
             st.sidebar.header("Price Chart Filters")
             st.session_state.metric = st.selectbox(
                 "Select Price Metric",
