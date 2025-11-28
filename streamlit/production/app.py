@@ -384,36 +384,12 @@ def render_top_nav():
 
     # Render each nav item as a Streamlit button so DOM is consistent and size doesn't change
     for (base_label, key), col in zip(nav_items, cols):
-        # For the Home button only, show mode and hint text, and toggle Lite/Pro
+        # Home button simply routes to the last-used mode for the Home page
         if key == "home":
-            current_mode = st.session_state.get("mode", "Lite")
-            if current_mode == "Lite":
-                label = "Home (Lite, click for Pro)"
-                next_mode = "Pro"
-            else:
-                label = "Home (Pro, click for Lite)"
-                next_mode = "Lite"
-
-            # Use a distinct, theme-aware style for the Home button
-            home_btn = col.button(label, key=f"topnav_{key}", use_container_width=True)
-            if home_btn:
-                st.session_state.mode = next_mode
+            clicked = col.button("Home", key=f"topnav_{key}", use_container_width=True)
+            if clicked:
                 st.session_state.page = "home"
                 safe_rerun()
-
-            # Inject a small CSS snippet to recolor the rendered Home button only
-            st.markdown(
-                """
-                <style>
-                section[data-testid='stHorizontalBlock'] > div div:first-child button {
-                    background: var(--nav-home-bg) !important;
-                    color: var(--nav-home-text) !important;
-                    border-color: rgba(15,23,42,0.15) !important;
-                }
-                </style>
-                """,
-                unsafe_allow_html=True,
-            )
         else:
             clicked = col.button(base_label, key=f"topnav_{key}", use_container_width=True)
             if clicked:
@@ -429,6 +405,27 @@ def render_sidebar():
 
         # Branding logo at top
         st.image("https://upload.wikimedia.org/wikipedia/commons/c/c8/FURECast_SPLG.png", width='stretch')
+
+        # Mode toggle button only when on the Home page
+        if current == "home":
+            current_mode = st.session_state.get("mode", "Lite")
+            # if current_mode == "Lite":
+            #     toggle_label = "Click Here for Pro Analytics"
+            #     next_mode = "Pro"
+            # else:
+            #     toggle_label = "Click Here for Lite Analytics"
+            #     next_mode = "Lite"
+            if current_mode == "Lite":
+                toggle_label = "Click Here for Pro Mode 😎"
+                next_mode = "Pro"
+            else:
+                toggle_label = "Click Here for Lite Mode 🚀"
+                next_mode = "Lite"
+
+            if st.button(toggle_label, key="sidebar_mode_toggle", use_container_width=True):
+                st.session_state.mode = next_mode
+                st.session_state.page = "home"
+                safe_rerun()
 
         # Show GBR architecture diagram only on the GBR Model Details page
         if current == "gbr_details":
