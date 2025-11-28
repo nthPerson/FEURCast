@@ -1249,6 +1249,210 @@ def render_performance_page():
 
             st.warning(f"Could not render plot: {label}")
 
+    # ========== Financial Performance Metrics ==========
+    st.markdown("---")
+    st.markdown('<p class="chart-header">Financial Performance Metrics</p>', unsafe_allow_html=True)
+    st.markdown("These metrics evaluate the model's performance from a trading/investment perspective.")
+    
+    # Custom CSS for metrics tables - prevent wrapping in Metric and Value columns
+    st.markdown("""
+    <style>
+    .metrics-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 1rem 0;
+    }
+    .metrics-table th, .metrics-table td {
+        border: 1px solid #ddd;
+        padding: 8px 12px;
+        text-align: left;
+        # color: #F8F9FA; # text color for both dark and light modes
+        # color: #1a1a1a; # works in both dark and light modes with this commented out. Don't think about it, just go with it.
+    }
+    .metrics-table th {
+        background-color: #f8f9fa;
+        font-weight: 600;
+        color: #1a1a1a;
+    }
+    .metrics-table .metric-col {
+        white-space: nowrap;
+        min-width: 200px;
+    }
+    .metrics-table .value-col {
+        white-space: nowrap;
+        min-width: 120px;
+        font-family: monospace;
+    }
+    .metrics-table .desc-col {
+        min-width: 300px;
+    }
+    /* Dark mode styles */
+    html[data-theme='dark'] .metrics-table th,
+    html[data-theme='dark'] .metrics-table td {
+        border-color: #334155;
+        color: #e2e8f0;
+    }
+    html[data-theme='dark'] .metrics-table th {
+        background-color: #1e293b;
+        color: #f1f5f9;
+    }
+    html[data-theme='dark'] .metrics-table td {
+        background-color: #0f172a;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Load metrics from metrics.json
+    metrics_path = os.path.join(os.path.dirname(__file__), "pred_model", "models", "metrics.json")
+    financial_metrics_data = []
+    try:
+        import json
+        with open(metrics_path, 'r') as f:
+            metrics_json = json.load(f)
+        
+        if 'financial_metrics' in metrics_json:
+            fm = metrics_json['financial_metrics']
+            
+            # Define descriptions for each financial metric
+            fin_metric_descriptions = {
+                'sharpe_ratio': ('Sharpe Ratio', 'Risk-adjusted return measure; higher values indicate better risk-adjusted performance. Values > 1.0 are generally considered good.'),
+                'max_drawdown': ('Max Drawdown', 'Largest peak-to-trough decline in portfolio value. Expressed as a negative percentage; closer to 0% is better.'),
+                'profit_factor': ('Profit Factor', 'Ratio of gross profits to gross losses. Values > 1.0 indicate profitability; higher is better.'),
+                'win_rate': ('Win Rate', 'Percentage of trades that were profitable. Expressed as a decimal (e.g., 0.54 = 54% win rate).'),
+                'avg_win': ('Average Win', 'Mean return on profitable trades. Higher values indicate larger average gains.'),
+                'avg_loss': ('Average Loss', 'Mean return on losing trades. Values closer to 0 indicate smaller average losses.'),
+            }
+            
+            for key, value in fm.items():
+                display_name, description = fin_metric_descriptions.get(key, (key.replace('_', ' ').title(), 'No description available.'))
+                # Format the value appropriately
+                if key == 'sharpe_ratio':
+                    formatted_value = f"{value:.4f}"
+                elif key == 'max_drawdown':
+                    formatted_value = f"{value * 100:.2f}%"
+                elif key == 'profit_factor':
+                    formatted_value = f"{value:.4f}"
+                elif key == 'win_rate':
+                    formatted_value = f"{value * 100:.2f}%"
+                elif key in ('avg_win', 'avg_loss'):
+                    formatted_value = f"{value * 100:.4f}%"
+                else:
+                    formatted_value = f"{value:.6f}"
+                
+                financial_metrics_data.append({
+                    'Metric': display_name,
+                    'Value': formatted_value,
+                    'Description': description
+                })
+            
+            if financial_metrics_data:
+                # Build HTML table for better column width control
+                html_rows = ""
+                for row in financial_metrics_data:
+                    html_rows += f'<tr><td class="metric-col">{row["Metric"]}</td><td class="value-col">{row["Value"]}</td><td class="desc-col">{row["Description"]}</td></tr>'
+                
+                html_table = f"""
+                <table class="metrics-table">
+                    <thead>
+                        <tr>
+                            <th class="metric-col">Metric</th>
+                            <th class="value-col">Value</th>
+                            <th class="desc-col">Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {html_rows}
+                    </tbody>
+                </table>
+                """
+                st.markdown(html_table, unsafe_allow_html=True)
+            else:
+                st.info("No financial metrics available in metrics.json.")
+        else:
+            st.info("Financial metrics not found in metrics.json.")
+    except Exception as e:
+        st.error(f"Could not load financial metrics: {e}")
+
+    # ========== Regression Performance Metrics ==========
+    st.markdown("---")
+    st.markdown('<p class="chart-header">Regression Performance Metrics</p>', unsafe_allow_html=True)
+    st.markdown("These metrics evaluate the model's regression accuracy on the held-out test set.")
+    
+    regression_metrics_data = []
+    try:
+        # Reuse metrics_json if already loaded, otherwise load again
+        if 'metrics_json' not in dir():
+            import json
+            with open(metrics_path, 'r') as f:
+                metrics_json = json.load(f)
+        
+        if 'test' in metrics_json:
+            test_metrics = metrics_json['test']
+            
+            # Define descriptions for each regression metric
+            reg_metric_descriptions = {
+                'mse': ('MSE (Mean Squared Error)', 'Average of squared prediction errors. Lower values indicate better fit; sensitive to outliers.'),
+                'rmse': ('RMSE (Root Mean Squared Error)', 'Square root of MSE; in the same units as the target variable. Lower is better.'),
+                'mae': ('MAE (Mean Absolute Error)', 'Average of absolute prediction errors. Less sensitive to outliers than MSE. Lower is better.'),
+                'r2': ('R² (Coefficient of Determination)', 'Proportion of variance explained by the model. Values closer to 1.0 indicate better fit; can be negative for poor models.'),
+                'smape': ('SMAPE (Symmetric Mean Absolute Percentage Error)', 'Percentage error metric bounded between 0-200%. Lower values indicate better accuracy.'),
+                'directional_accuracy': ('Directional Accuracy', 'Percentage of predictions that correctly predicted the direction of price movement. Values > 0.5 indicate better than random guessing.'),
+            }
+            
+            # Only include the regression metrics (exclude 'predictions' list)
+            regression_keys = ['mse', 'rmse', 'mae', 'r2', 'smape', 'directional_accuracy']
+            
+            for key in regression_keys:
+                if key in test_metrics:
+                    value = test_metrics[key]
+                    display_name, description = reg_metric_descriptions.get(key, (key.upper(), 'No description available.'))
+                    
+                    # Format the value appropriately
+                    if key == 'directional_accuracy':
+                        formatted_value = f"{value * 100:.2f}%"
+                    elif key == 'smape':
+                        formatted_value = f"{value:.2f}%"
+                    elif key == 'r2':
+                        formatted_value = f"{value:.6f}"
+                    elif key in ('mse', 'rmse', 'mae'):
+                        formatted_value = f"{value:.6e}" if value < 0.001 else f"{value:.6f}"
+                    else:
+                        formatted_value = f"{value:.6f}"
+                    
+                    regression_metrics_data.append({
+                        'Metric': display_name,
+                        'Value': formatted_value,
+                        'Description': description
+                    })
+            
+            if regression_metrics_data:
+                # Build HTML table for better column width control
+                html_rows = ""
+                for row in regression_metrics_data:
+                    html_rows += f'<tr><td class="metric-col">{row["Metric"]}</td><td class="value-col">{row["Value"]}</td><td class="desc-col">{row["Description"]}</td></tr>'
+                
+                html_table = f"""
+                <table class="metrics-table">
+                    <thead>
+                        <tr>
+                            <th class="metric-col">Metric</th>
+                            <th class="value-col">Value</th>
+                            <th class="desc-col">Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {html_rows}
+                    </tbody>
+                </table>
+                """
+                st.markdown(html_table, unsafe_allow_html=True)
+            else:
+                st.info("No regression metrics available in the test object.")
+        else:
+            st.info("Test metrics not found in metrics.json.")
+    except Exception as e:
+        st.error(f"Could not load regression metrics: {e}")
+
     st.markdown("---")
     if st.button("Back to Dashboard", key="back_from_perf"):
         st.session_state.page = "home"
