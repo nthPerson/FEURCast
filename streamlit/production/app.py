@@ -1,5 +1,5 @@
 """
-FUREcast - GBR Demo Application
+FUREcast - SPLG GBR Analytics Dashboard
 """
 
 import streamlit as st
@@ -487,7 +487,7 @@ def render_sidebar():
         else:
             # Compact sidebar for Glossary or other pages where filters are not needed
             st.markdown("### ℹ️ About FUREcast")
-            st.markdown("Demo view: sidebar filters hidden for this page.")
+            st.markdown("Sidebar filters hidden for this page.")
             if st.button("Back to Dashboard", key="back_from_glossary_sidebar"):
                 st.session_state.page = "home"
                 safe_rerun()
