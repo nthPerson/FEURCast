@@ -130,7 +130,7 @@ FRED_KEY = get_secret('FRED_KEY', '')
 
 # Page configuration
 st.set_page_config(
-    page_title="FUREcast - SPLG Analytics Demo",
+    page_title="FUREcast - SPLG Analytics Dashboard",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded"
