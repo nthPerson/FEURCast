@@ -435,8 +435,44 @@ def render_sidebar():
         if current in ("home", "performance"):
             st.markdown("### ℹ️ About FUREcast")
             st.markdown("""
-            Interactive dashboard showcasing SPLG (now SPYM) ETF analysis with GradientBoostingRegressor and LLM orchestration.
+            Interactive dashboard showcasing SPLG (now SPYM) ETF analysis with GradientBoostingRegressor and LLM orchestration. See dropdowns below for additional details.
             """)
+            st.sidebar.header("Price Chart Filters")
+            st.session_state.metric = st.selectbox(
+                "Select Price Metric",
+                options=["Closing", "Opening", "Daily High", "Daily Low", "Daily Current"],
+                index=["Closing", "Opening", "Daily High", "Daily Low", "Daily Current"].index(st.session_state.metric),
+                key="metric_selector"
+            )
+
+            # Define the maximum available date from our dataset (last available date in historical data)
+            MAX_DATASET_DATE = pd.to_datetime(get_latest_date_in_dataset())
+
+            # Convert Timestamp to date for comparison and display
+            current_end_date = st.session_state.end_date.date() if isinstance(st.session_state.end_date, pd.Timestamp) else st.session_state.end_date
+            current_start_date = st.session_state.start_date.date() if isinstance(st.session_state.start_date, pd.Timestamp) else st.session_state.start_date
+
+            st.session_state.start_date = st.date_input(
+                "Start Date",
+                value=current_start_date,
+                key="start_date_selector",
+                max_value=MAX_DATASET_DATE.date()
+            )
+            st.session_state.end_date = st.date_input(
+                "End Date",
+                value=min(current_end_date, MAX_DATASET_DATE.date()),
+                key="end_date_selector",
+                max_value=MAX_DATASET_DATE.date()
+            )
+
+            # Convert back to Timestamp for consistency
+            st.session_state.start_date = pd.to_datetime(st.session_state.start_date)
+            st.session_state.end_date = pd.to_datetime(st.session_state.end_date)
+
+            # st.markdown("### ℹ️ About FUREcast")
+            # st.markdown("""
+            # Interactive dashboard showcasing SPLG (now SPYM) ETF analysis with GradientBoostingRegressor and LLM orchestration.
+            # """)
             with st.expander("Data Sources", expanded=False):
                 st.markdown("- SPLG/SPYM historical data (2005-2025)\n- Sector ETF data\n- Technical indicators\n- Risk metrics\n- Market events")
             with st.expander("Prediction Model", expanded=False):
@@ -478,37 +514,37 @@ def render_sidebar():
             # st.markdown('<div class="disclaimer">⚠️ <strong>Educational Use Only</strong><br>Not financial advice.</div>', unsafe_allow_html=True)
 
             # st.markdown("---")
-            st.sidebar.header("Price Chart Filters")
-            st.session_state.metric = st.selectbox(
-                "Select Price Metric",
-                options=["Closing", "Opening", "Daily High", "Daily Low", "Daily Current"],
-                index=["Closing", "Opening", "Daily High", "Daily Low", "Daily Current"].index(st.session_state.metric),
-                key="metric_selector"
-            )
+            # st.sidebar.header("Price Chart Filters")
+            # st.session_state.metric = st.selectbox(
+            #     "Select Price Metric",
+            #     options=["Closing", "Opening", "Daily High", "Daily Low", "Daily Current"],
+            #     index=["Closing", "Opening", "Daily High", "Daily Low", "Daily Current"].index(st.session_state.metric),
+            #     key="metric_selector"
+            # )
 
-            # Define the maximum available date from our dataset (last available date in historical data)
-            MAX_DATASET_DATE = pd.to_datetime(get_latest_date_in_dataset())
+            # # Define the maximum available date from our dataset (last available date in historical data)
+            # MAX_DATASET_DATE = pd.to_datetime(get_latest_date_in_dataset())
 
-            # Convert Timestamp to date for comparison and display
-            current_end_date = st.session_state.end_date.date() if isinstance(st.session_state.end_date, pd.Timestamp) else st.session_state.end_date
-            current_start_date = st.session_state.start_date.date() if isinstance(st.session_state.start_date, pd.Timestamp) else st.session_state.start_date
+            # # Convert Timestamp to date for comparison and display
+            # current_end_date = st.session_state.end_date.date() if isinstance(st.session_state.end_date, pd.Timestamp) else st.session_state.end_date
+            # current_start_date = st.session_state.start_date.date() if isinstance(st.session_state.start_date, pd.Timestamp) else st.session_state.start_date
 
-            st.session_state.start_date = st.date_input(
-                "Start Date",
-                value=current_start_date,
-                key="start_date_selector",
-                max_value=MAX_DATASET_DATE.date()
-            )
-            st.session_state.end_date = st.date_input(
-                "End Date",
-                value=min(current_end_date, MAX_DATASET_DATE.date()),
-                key="end_date_selector",
-                max_value=MAX_DATASET_DATE.date()
-            )
+            # st.session_state.start_date = st.date_input(
+            #     "Start Date",
+            #     value=current_start_date,
+            #     key="start_date_selector",
+            #     max_value=MAX_DATASET_DATE.date()
+            # )
+            # st.session_state.end_date = st.date_input(
+            #     "End Date",
+            #     value=min(current_end_date, MAX_DATASET_DATE.date()),
+            #     key="end_date_selector",
+            #     max_value=MAX_DATASET_DATE.date()
+            # )
 
-            # Convert back to Timestamp for consistency
-            st.session_state.start_date = pd.to_datetime(st.session_state.start_date)
-            st.session_state.end_date = pd.to_datetime(st.session_state.end_date)
+            # # Convert back to Timestamp for consistency
+            # st.session_state.start_date = pd.to_datetime(st.session_state.start_date)
+            # st.session_state.end_date = pd.to_datetime(st.session_state.end_date)
         else:
             # Compact sidebar for Glossary or other pages where filters are not needed
             st.markdown("### ℹ️ About FUREcast")
