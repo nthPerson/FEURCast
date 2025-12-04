@@ -922,8 +922,9 @@ def render_pro_mode():
         st.session_state.last_query = query
         
         with st.spinner("Planning analysis..."):
-            # Route query
-            plan = route_query(query)
+            # Route query and persist the raw input so users can inspect it later
+            plan = route_query(query) or {}
+            plan['user_query'] = query
         
         st.markdown("---")
         
