@@ -1164,7 +1164,7 @@ def main():
     st.markdown(f"""
     <div style='text-align:center; color:#666; padding:2rem;'>
         <p><strong>FUREcast SPLG Dashboard</strong> | Educational Analytics Platform</p>
-        <p style='font-size:0.9rem;'>Built with Streamlit, scikit-learn, OpenAI, and Plotly{demo_suffix}</p>
+        <p style='font-size:0.9rem;'>Built with Streamlit, scikit-learn, OpenAI API, and Plotly{demo_suffix}</p>
         {warning_line}
     </div>
     """, unsafe_allow_html=True)
