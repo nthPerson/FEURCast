@@ -1040,7 +1040,7 @@ def render_pro_mode():
     
     # Additional tools section - MOVED OUTSIDE the conditional logic
     st.markdown("---")
-    header_with_info('Advanced Sector Analytics', 'Deep-dive tools: Sector Risk, Holdings drill-down, Price Trends, and Feature Analysis. Use these to learn how sector composition and holdings influence ETF behavior.')
+    header_with_info('Advanced Analytics', 'Deep-dive tools: Sector Risk, Holdings drill-down, Price Trends, and Feature Analysis. Use these to learn how sector composition and holdings influence ETF behavior.')
     
     tab1, tab2, tab3, tab4 = st.tabs(["Sector Risk", "Holdings Detail", "Price Trends", "Feature Analysis"])
 
