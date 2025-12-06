@@ -582,6 +582,7 @@ def render_prediction_card(prediction):
     confidence_block = ""
     if show_confidence:
         confidence_block = (
+            "\n                "
             f"<div style=\"font-size:1.05rem; font-weight:500;\">Confidence:<br>"
             f"<span style=\"font-size:1.4rem; font-weight:700;\">{confidence_value}</span></div>"
         )
@@ -594,8 +595,7 @@ def render_prediction_card(prediction):
                     <div style="font-size:1.1rem; font-weight:600;">{emoji} Model Prediction</div>
                     <div style="font-size:2.1rem; font-weight:800; line-height:1; margin-top:4px;">{direction.upper()}</div>
                 </div>
-                <div style="font-size:1.05rem; font-weight:500;">Expected Return:<br><span style="font-size:1.4rem; font-weight:700;">{pred_return:+.2f}%</span></div>
-                {confidence_block}
+                <div style="font-size:1.05rem; font-weight:500;">Expected Return:<br><span style="font-size:1.4rem; font-weight:700;">{pred_return:+.2f}%</span></div>{confidence_block}
                 <div style="font-size:1.05rem; font-weight:500;">Timeframe:<br><span style="font-size:1.4rem; font-weight:700;">Next Day</span></div>
             </div>
         </div>
@@ -874,6 +874,7 @@ def render_pro_mode():
         confidence_block = ""
         if show_confidence:
             confidence_block = (
+                "\n                    "
                 f"<div style=\"font-size:0.95rem; font-weight:500;\">Confidence:<br>"
                 f"<span style=\"font-size:1.3rem; font-weight:700;\">{confidence_value}</span></div>"
             )
@@ -887,8 +888,7 @@ def render_pro_mode():
                         <div style="font-size:1.0rem; font-weight:600;">{emoji} Prediction</div>
                         <div style="font-size:1.9rem; font-weight:800; line-height:1; margin-top:4px;">{direction.upper()}</div>
                     </div>
-                    <div style="font-size:0.95rem; font-weight:500;">Expected Return:<br><span style="font-size:1.3rem; font-weight:700;">{prediction['predicted_return']*100:+.2f}%</span></div>
-                    {confidence_block}
+                    <div style="font-size:0.95rem; font-weight:500;">Expected Return:<br><span style="font-size:1.3rem; font-weight:700;">{prediction['predicted_return']*100:+.2f}%</span></div>{confidence_block}
                     <div style="font-size:0.95rem; font-weight:500;">Timeframe:<br><span style="font-size:1.3rem; font-weight:700;">Next Day</span></div>
                 </div>
             </div>
