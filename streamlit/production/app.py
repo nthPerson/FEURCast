@@ -404,8 +404,7 @@ def render_sidebar():
         current = st.session_state.get("page", "home")
 
         # Branding logo at top
-        # st.image("https://upload.wikimedia.org/wikipedia/commons/c/c8/FURECast_SPLG.png", width='stretch')
-        st.image("../../FUREcast_logo.png", width='stretch')
+        st.image("FUREcast_logo.png", width='stretch')
 
         # Mode toggle button only when on the Home page
         if current == "home":
