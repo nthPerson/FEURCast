@@ -257,11 +257,16 @@ def initialize_session_state():
             "Daily Current": "current_price"
         }
     if "metric" not in st.session_state: st.session_state.metric = "Closing"
-    if "start_date" not in st.session_state: 
-        st.session_state.start_date = pd.to_datetime("2023-01-01")
-    # Ensure we capture the latest available dataset date first, then default end_date to it.
+    # Ensure we capture the latest available dataset date first, then default the
+    # date filters relative to that anchor.
     if "max_dataset_date" not in st.session_state:
-        st.session_state.max_dataset_date = get_latest_date_in_dataset()
+        st.session_state.max_dataset_date = pd.to_datetime(get_latest_date_in_dataset())
+    else:
+        st.session_state.max_dataset_date = pd.to_datetime(st.session_state.max_dataset_date)
+
+    if "start_date" not in st.session_state:
+        six_months_prior = st.session_state.max_dataset_date - pd.DateOffset(months=6)
+        st.session_state.start_date = six_months_prior
     if "end_date" not in st.session_state:
         # Default end date now dynamically set to latest available date
         st.session_state.end_date = st.session_state.max_dataset_date
@@ -449,7 +454,7 @@ def render_sidebar():
             )
 
             # Define the maximum available date from our dataset (last available date in historical data)
-            MAX_DATASET_DATE = pd.to_datetime(get_latest_date_in_dataset())
+            MAX_DATASET_DATE = pd.to_datetime(st.session_state.get("max_dataset_date", get_latest_date_in_dataset()))
 
             # Convert Timestamp to date for comparison and display
             current_end_date = st.session_state.end_date.date() if isinstance(st.session_state.end_date, pd.Timestamp) else st.session_state.end_date
@@ -459,13 +464,15 @@ def render_sidebar():
                 "Start Date",
                 value=current_start_date,
                 key="start_date_selector",
-                max_value=MAX_DATASET_DATE.date()
+                max_value=MAX_DATASET_DATE.date(),
+                format="MM/DD/YYYY"
             )
             st.session_state.end_date = st.date_input(
                 "End Date",
                 value=min(current_end_date, MAX_DATASET_DATE.date()),
                 key="end_date_selector",
-                max_value=MAX_DATASET_DATE.date()
+                max_value=MAX_DATASET_DATE.date(),
+                format="MM/DD/YYYY"
             )
 
             # Convert back to Timestamp for consistency
@@ -473,9 +480,6 @@ def render_sidebar():
             st.session_state.end_date = pd.to_datetime(st.session_state.end_date)
 
             # st.markdown("### ℹ️ About FUREcast")
-            # st.markdown("""
-            # Interactive dashboard showcasing SPLG (now SPYM) ETF analysis with GradientBoostingRegressor and LLM orchestration.
-            # """)
             with st.expander("Data Sources", expanded=False):
                 st.markdown("- SPLG/SPYM historical data (2005-2025)\n- Sector ETF data\n- Technical indicators\n- Risk metrics\n- Market events")
             with st.expander("Prediction Model", expanded=False):
