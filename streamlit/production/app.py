@@ -809,16 +809,24 @@ def render_lite_mode():
         except Exception as e:
             st.error(f"❌ Chart failed to render: {e}")
 
+    # Credit for "Exogenous Market Events" (these are the red dots overlayed on the graph that represent events that impact the market)
+    st.info("""
+    📰 **Exogenous market event data source**:
+    - Professionally aggregated by Fernando Cerdá
+      - Financial Advisor, Investment Strategist, and FUREcast's subject matter expert
+      - Author of *From Beginner to Investor: Quick Guide to Start Investing* (available on Amazon)
+    - Provides 'Event', 'Category', and 'Econimic/Market Impact (S&P 500)' in Price Chart above (red colored points)
+    """)
 
-    # =============================
+    # ============================
     # 💡 How to Use Section
     # =============================
-    st.info("""
-    **💡 How to Use This Tool:**
-    1. Review model prediction  
-    2. Examine feature influence  
-    3. Compare with recent price trends  
-    """)
+    # st.info("""
+    # **💡 How to Use This Tool:**
+    # 1. Review model prediction  
+    # 2. Examine feature influence  
+    # 3. Compare with recent price trends  
+    # """)
 
 
 # ---------- PRO MODE ----------
