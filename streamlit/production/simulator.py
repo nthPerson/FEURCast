@@ -11,7 +11,7 @@ import numpy as np
 from datetime import datetime, timedelta
 import plotly.graph_objects as go
 import plotly.express as px
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Union
 import os
 from openai import OpenAI
 
@@ -103,6 +103,159 @@ def get_holdings_top_n(n: int = 20) -> pd.DataFrame:
         result["Market Value"] = (result["Percentage"] / 100.0)  # proxy
 
     return result
+
+
+def _rich_features_path() -> str:
+    """Return absolute path to the engineered SPLG feature dataset."""
+    return os.path.abspath(
+        os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'rich_features_SPLG_history_full.csv')
+    )
+
+
+def load_rich_features_dataset() -> pd.DataFrame:
+    """Load the engineered SPLG dataset with parsed dates.
+
+    The dataset is relatively small (<6000 rows), so we read it fresh per request
+    instead of caching to keep the implementation straightforward.
+    """
+    data_path = _rich_features_path()
+    if not os.path.exists(data_path):
+        raise FileNotFoundError(f"Dataset not found at {data_path}")
+
+    df = pd.read_csv(data_path)
+    if 'date' in df.columns:
+        df['date'] = pd.to_datetime(df['date'], errors='coerce')
+        df = df.dropna(subset=['date']).sort_values('date').reset_index(drop=True)
+    return df
+
+
+def _treemap_nodes_path() -> str:
+    return os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'treemap_nodes.csv')
+
+
+def load_treemap_nodes() -> pd.DataFrame:
+    """Load treemap_nodes.csv with basic validation."""
+    csv_path = _treemap_nodes_path()
+    if not os.path.exists(csv_path):
+        raise FileNotFoundError(f"Treemap data not found at {csv_path}")
+    df = pd.read_csv(csv_path)
+    required_cols = {'Sector', 'Weight (%)'}
+    missing = required_cols - set(df.columns)
+    if missing:
+        raise ValueError(f"treemap_nodes.csv missing columns: {', '.join(sorted(missing))}")
+    return df
+
+
+def _weighted_average(values: pd.Series, weights: pd.Series) -> float:
+    mask = (~values.isna()) & (~weights.isna())
+    if not mask.any():
+        return float('nan')
+    return float(np.average(values[mask], weights=weights[mask]))
+
+
+def query_rich_features(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    columns: Optional[List[str]] = None,
+    limit: int = 500,
+    include_summary: bool = True,
+) -> Dict[str, Any]:
+    """Filter rows from rich_features_SPLG_history_full.csv for LLM tool use.
+
+    Args:
+        start_date: YYYY-MM-DD string; defaults to 180 days before the latest record.
+        end_date: YYYY-MM-DD string; defaults to the latest available date.
+        columns: Optional list of columns to return. Missing columns are ignored with warnings.
+        limit: Maximum number of rows to return (most recent rows after filtering).
+        include_summary: Whether to include lightweight aggregate info in the response.
+
+    Returns:
+        Dict with `records`, `metadata`, `warnings`, and optional `summary` keys.
+    """
+
+    dataset = load_rich_features_dataset()
+    warnings: List[str] = []
+
+    if dataset.empty:
+        return {
+            'records': [],
+            'metadata': {'row_count': 0, 'columns': [], 'source': _rich_features_path()},
+            'warnings': ['rich_features dataset is empty.']
+        }
+
+    min_date = dataset['date'].min()
+    max_date = dataset['date'].max()
+
+    def _parse_date(value: Optional[str], fallback: pd.Timestamp) -> pd.Timestamp:
+        if not value:
+            return fallback
+        parsed = pd.to_datetime(value, errors='coerce')
+        if pd.isna(parsed):
+            warnings.append(f"Could not parse date '{value}'. Using fallback {fallback.date()} instead.")
+            return fallback
+        return parsed
+
+    default_start = max_date - pd.Timedelta(days=180)
+    start_ts = _parse_date(start_date, default_start)
+    end_ts = _parse_date(end_date, max_date)
+
+    if start_ts < min_date:
+        warnings.append(f"start_date clipped to dataset minimum {min_date.date()}.")
+        start_ts = min_date
+    if end_ts > max_date:
+        warnings.append(f"end_date clipped to dataset maximum {max_date.date()}.")
+        end_ts = max_date
+    if start_ts > end_ts:
+        warnings.append("start_date exceeds end_date; swapping values.")
+        start_ts, end_ts = end_ts, start_ts
+
+    filtered = dataset[(dataset['date'] >= start_ts) & (dataset['date'] <= end_ts)].copy()
+
+    if columns:
+        normalized_cols = [col.strip() for col in columns if isinstance(col, str)]
+        available = [c for c in normalized_cols if c in filtered.columns]
+        missing = sorted(set(normalized_cols) - set(available))
+        if missing:
+            warnings.append(f"Columns not found and skipped: {', '.join(missing)}")
+        # Always include date for context
+        if 'date' not in available:
+            available.insert(0, 'date')
+        filtered = filtered[available]
+
+    filtered = filtered.sort_values('date')
+    if limit and limit > 0:
+        filtered = filtered.tail(limit)
+
+    records = filtered.to_dict(orient='records')
+
+    metadata = {
+        'row_count': len(filtered),
+        'columns': list(filtered.columns),
+        'start_date': start_ts.strftime('%Y-%m-%d'),
+        'end_date': end_ts.strftime('%Y-%m-%d'),
+        'source': _rich_features_path()
+    }
+
+    summary: Optional[Dict[str, Any]] = None
+    if include_summary and not filtered.empty:
+        latest_row = filtered.iloc[-1]
+        summary = {
+            'latest_date': latest_row['date'].strftime('%Y-%m-%d') if 'date' in filtered.columns else None,
+            'latest_close': float(latest_row['close']) if 'close' in filtered.columns else None,
+            'avg_return_5d': float(filtered['return_5d'].mean()) if 'return_5d' in filtered.columns else None,
+            'avg_volume': float(filtered['volume'].mean()) if 'volume' in filtered.columns else None,
+        }
+
+    response: Dict[str, Any] = {
+        'records': records,
+        'metadata': metadata,
+        'warnings': warnings
+    }
+
+    if summary is not None:
+        response['summary'] = summary
+
+    return response
 
 
 def get_openai_client():
@@ -555,8 +708,57 @@ def create_price_chart(metric, start_date, end_date, show_events: bool = True):
     return fig
 
 
-def create_sector_risk_treemap() -> go.Figure:
-    """Create treemap showing sector risk levels"""
+def create_sector_risk_treemap(metric: str = 'Beta') -> go.Figure:
+    """Create treemap showing sector risk levels derived from treemap_nodes.csv."""
+    try:
+        holdings_df = load_treemap_nodes()
+    except Exception:
+        return _create_static_sector_risk_treemap()
+
+    if metric not in holdings_df.columns:
+        raise ValueError(f"Metric '{metric}' not available in treemap data.")
+
+    summary = (
+        holdings_df.groupby('Sector')
+        .apply(lambda g: pd.Series({
+            'Weight (%)': g['Weight (%)'].sum(),
+            metric: _weighted_average(g[metric], g['Weight (%)'])
+        }))
+        .reset_index()
+        .rename(columns={'Sector': 'sector'})
+        .sort_values('Weight (%)', ascending=False)
+    )
+
+    fig = px.treemap(
+        summary,
+        path=['sector'],
+        values='Weight (%)',
+        color=metric,
+        color_continuous_scale='RdYlGn_r',
+        title=f'SPLG Sector Risk Map ({metric})',
+    )
+
+    fig.update_traces(
+        textposition='middle center',
+        textfont=dict(size=14),
+        texttemplate='%{label}',
+        hovertemplate=(
+            'sector=%{label}<br>'
+            'weight=%{value:.2f}%<br>'
+            f'{metric}=%{{color:.3f}}<extra></extra>'
+        )
+    )
+
+    fig.update_layout(
+        height=500,
+        coloraxis_colorbar=dict(title=metric)
+    )
+
+    return fig
+
+
+def _create_static_sector_risk_treemap() -> go.Figure:
+    """Fallback treemap when treemap_nodes.csv is unavailable."""
     sectors = {
         'Technology': {'size': 28.5, 'volatility': 0.185},
         'Healthcare': {'size': 13.2, 'volatility': 0.142},
@@ -570,44 +772,40 @@ def create_sector_risk_treemap() -> go.Figure:
         'Real Estate': {'size': 2.4, 'volatility': 0.225},
         'Materials': {'size': 2.8, 'volatility': 0.201}
     }
-    
+
     df = pd.DataFrame([
         {'sector': k, 'size': v['size'], 'volatility': v['volatility']}
         for k, v in sectors.items()
     ])
-
-    # Add volatility in percent so we can format it easily in hovertemplate
     df['volatility_pct'] = df['volatility'] * 100
-    
+
     fig = px.treemap(
         df,
         path=['sector'],
         values='size',
         color='volatility',
         color_continuous_scale='RdYlGn_r',
-        title='SPLG Sector Risk Map (by Volatility)',
-        custom_data=['volatility_pct']  # make volatility percent available to the trace
+        title='SPLG Sector Risk Map (Simulated)',
+        custom_data=['volatility_pct']
     )
 
     fig.update_traces(
-        # display label inside tiles (e.g. "Technology")
         textposition='middle center',
         textfont=dict(size=14),
         texttemplate='%{label}',
-        # hover shows sector, size with percent sign, and volatility as percent
         hovertemplate=(
             'sector=%{label}<br>'
             'size=%{value:.1f}%<br>'
             'volatility=%{customdata[0]:.1f}%<br>'
-            'Size of block indicates market share and color of box indicates volatility<extra></extra>'
+            '<extra></extra>'
         )
     )
-    
+
     fig.update_layout(
         height=500,
         coloraxis_colorbar=dict(title="Volatility (%)", tickformat='.1%')
     )
-    
+
     return fig
 
 
@@ -728,81 +926,192 @@ def create_feature_importance_chart(features: List[Dict[str, Any]]) -> go.Figure
     return fig
 
 
-def create_sector_comparison_chart(sectors: List[str]) -> go.Figure:
-    """Create line chart comparing sector performance"""
-    end_date = datetime.now()
-    start_date = end_date - timedelta(days=365)
-    
-    # Map sector names to ETF tickers
-    sector_tickers = {
-        'Technology': 'XLK',
-        'Healthcare': 'XLV',
-        'Financials': 'XLF',
-        'Consumer Discretionary': 'XLY',
-        'Industrials': 'XLI',
-        'Communications': 'XLC',
-        'Consumer Staples': 'XLP',
-        'Energy': 'XLE',
-        'Utilities': 'XLU',
-        'Real Estate': 'XLRE',
-        'Materials': 'XLB'
-    }
-    
-    tickers = [sector_tickers.get(s, 'XLK') for s in sectors[:3]]  # Limit to 3
-    df = fetch_prices(tickers, start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))
-    
-    fig = go.Figure()
-    
-    for ticker in tickers:
-        ticker_data = df[df['ticker'] == ticker].sort_values('date')
-        # Normalize to 100 at start
-        normalized = (ticker_data['close'] / ticker_data['close'].iloc[0]) * 100
-        
-        fig.add_trace(go.Scatter(
-            x=ticker_data['date'],
-            y=normalized,
-            mode='lines',
-            name=ticker,
-            line=dict(width=2)
-        ))
-    
-    fig.update_layout(
-        title='Sector Performance Comparison (Normalized)',
-        xaxis_title='Date',
-        yaxis_title='Normalized Price (Base = 100)',
-        hovermode='x unified',
-        template='plotly_white',
-        height=400
+def create_sector_bar_chart(
+    metric: str = 'DailyChangePct',
+    sectors: Optional[List[str]] = None,
+    top_n: Optional[int] = None,
+    title: str = 'Sector Metric Comparison'
+) -> go.Figure:
+    """Create a weighted bar chart of sector-level metrics using treemap data."""
+    df = load_treemap_nodes()
+    if metric not in df.columns:
+        raise ValueError(f"Metric '{metric}' not available in treemap data.")
+
+    grouped = (
+        df.groupby('Sector')
+        .apply(lambda g: pd.Series({
+            'Weight (%)': g['Weight (%)'].sum(),
+            metric: _weighted_average(g[metric], g['Weight (%)'])
+        }))
+        .reset_index()
+        .rename(columns={'Sector': 'sector'})
+        .sort_values('Weight (%)', ascending=False)
     )
-    
+
+    if sectors:
+        sectors_upper = {s.lower() for s in sectors}
+        grouped = grouped[grouped['sector'].str.lower().isin(sectors_upper)]
+
+    if top_n:
+        grouped = grouped.head(top_n)
+
+    if grouped.empty:
+        raise ValueError('No sector data available for the requested filters.')
+
+    fig = go.Figure(go.Bar(
+        x=grouped['sector'],
+        y=grouped[metric],
+        marker_color='steelblue'
+    ))
+    fig.update_layout(
+        title=title,
+        xaxis_title='Sector',
+        yaxis_title=metric,
+        template='plotly_white',
+        height=420
+    )
     return fig
 
 
-def viz_from_spec(spec: Dict[str, Any]) -> go.Figure:
-    """
-    Create visualization from specification.
-    
-    This demonstrates the planned tool interface where LLM can request
-    charts by providing a structured spec.
-    """
-    chart_type = spec.get('type', 'line')
-    
-    if chart_type == 'treemap':
-        return create_sector_risk_treemap()
-    elif chart_type == 'bar' and 'features' in spec:
-        return create_feature_importance_chart(spec['features'])
-    elif chart_type == 'line' and 'sectors' in spec:
-        return create_sector_comparison_chart(spec['sectors'])
-    elif chart_type == 'price':
-        # Build a reasonable date range and let create_price_chart clamp to dataset max
-        days = int(spec.get('days', 180))
-        end_date = pd.to_datetime('today').normalize()
-        start_date = end_date - pd.Timedelta(days=days)
-        # default to 'close' metric; create_price_chart handles mapping
-        return create_price_chart('close', start_date, end_date, show_events=True)
+def create_sector_comparison_chart(sectors: List[str], metric: str = 'DailyChangePct') -> go.Figure:
+    """Compatibility wrapper: compare sectors using real treemap metrics."""
+    return create_sector_bar_chart(metric=metric, sectors=sectors, title='Sector Comparison')
+
+
+def _records_to_dataframe(result: Optional[Any]) -> Optional[pd.DataFrame]:
+    if isinstance(result, dict):
+        if 'records' in result and isinstance(result['records'], list):
+            return pd.DataFrame(result['records'])
+        if 'data' in result and isinstance(result['data'], list):
+            return pd.DataFrame(result['data'])
+    elif isinstance(result, list):
+        return pd.DataFrame(result)
+    return None
+
+
+def create_generic_chart(
+    data: pd.DataFrame,
+    chart_type: str,
+    x: str,
+    y: Union[str, List[str]],
+    group: Optional[str] = None,
+    title: Optional[str] = None,
+    yaxis_title: Optional[str] = None,
+) -> go.Figure:
+    if data is None or data.empty:
+        raise ValueError('No data available for visualization.')
+    if x not in data.columns:
+        raise ValueError(f"Column '{x}' not found in data.")
+
+    series = y if isinstance(y, list) else [y]
+    for col in series:
+        if col not in data.columns:
+            raise ValueError(f"Column '{col}' not found in data.")
+
+    fig = go.Figure()
+    if chart_type == 'line':
+        if group and isinstance(y, str) and group in data.columns:
+            for group_name, subset in data.groupby(group):
+                fig.add_trace(go.Scatter(
+                    x=subset[x],
+                    y=subset[y],
+                    mode='lines',
+                    name=str(group_name)
+                ))
+        else:
+            for col in series:
+                fig.add_trace(go.Scatter(x=data[x], y=data[col], mode='lines', name=str(col)))
+    elif chart_type == 'bar':
+        if group and isinstance(y, str) and group in data.columns:
+            grouped = data.groupby([x, group])[y].mean().reset_index()
+            for group_name in grouped[group].unique():
+                subset = grouped[grouped[group] == group_name]
+                fig.add_trace(go.Bar(x=subset[x], y=subset[y], name=str(group_name)))
+        else:
+            for col in series:
+                fig.add_trace(go.Bar(x=data[x], y=data[col], name=str(col)))
     else:
-        # Default to a price chart
-        days = 180
-        end_date = pd.to_datetime('today').normalize()
-        start_date = end_date - pd.Timedelta(days=days)
-        return create_price_chart('close', start_date, end_date, show_events=True)
+        raise ValueError(f"Unsupported generic chart type '{chart_type}'.")
+
+    fig.update_layout(
+        title=title or '',
+        xaxis_title=x,
+        yaxis_title=yaxis_title or ', '.join(series),
+        template='plotly_white',
+        height=400
+    )
+    return fig
+
+
+def viz_from_spec(spec: Dict[str, Any], tool_results: Optional[Dict[str, Any]] = None) -> Optional[go.Figure]:
+    """Render a visualization described by the normalized plan spec."""
+    chart_type = spec.get('type', 'price')
+    specs = spec.get('specs', {}) or {}
+    data_key = spec.get('data_key')
+    data_df = _records_to_dataframe(tool_results.get(data_key)) if tool_results and data_key else None
+
+    if chart_type == 'treemap':
+        if specs.get('level', 'sector') == 'holdings':
+            color_metric = specs.get('color_metric', 'DailyChangePct')
+            return create_sector_holdings_treemap(color_metric=color_metric)
+        metric = specs.get('metric', 'Beta')
+        return create_sector_risk_treemap(metric=metric)
+
+    if chart_type == 'feature_importance':
+        features = specs.get('features')
+        if not features and data_df is not None:
+            features = data_df.to_dict(orient='records')
+        if not features:
+            raise ValueError('Feature importance chart requires features data.')
+        return create_feature_importance_chart(features)
+
+    if chart_type == 'bar':
+        if specs.get('source') == 'sectors' or specs.get('sectors'):
+            return create_sector_bar_chart(
+                metric=specs.get('metric', 'DailyChangePct'),
+                sectors=specs.get('sectors'),
+                top_n=specs.get('top_n'),
+                title=specs.get('title', 'Sector Comparison'),
+            )
+        if data_df is not None:
+            return create_generic_chart(
+                data_df,
+                'bar',
+                x=specs.get('x', 'label'),
+                y=specs.get('y', ['value']),
+                group=specs.get('group'),
+                title=specs.get('title'),
+                yaxis_title=specs.get('y_label'),
+            )
+        raise ValueError('Bar chart requires sectors or tool data.')
+
+    if chart_type == 'line':
+        if data_df is None:
+            raise ValueError('Line chart requires tool data via data_key.')
+        return create_generic_chart(
+            data_df,
+            'line',
+            x=specs.get('x', 'date'),
+            y=specs.get('y', ['value']),
+            group=specs.get('group'),
+            title=specs.get('title'),
+            yaxis_title=specs.get('y_label'),
+        )
+
+    if chart_type == 'price':
+        metric = specs.get('metric', 'close')
+        days = int(specs.get('days', 180) or 180)
+        start = specs.get('start_date')
+        end = specs.get('end_date')
+        end_date = pd.to_datetime(end) if end else pd.to_datetime('today').normalize()
+        start_date = pd.to_datetime(start) if start else end_date - pd.Timedelta(days=days)
+        return create_price_chart(metric, start_date, end_date, show_events=specs.get('show_events', True))
+
+    if chart_type == 'table':
+        # Tables are rendered directly in the UI layer
+        return None
+
+    # Default: return price chart fallback
+    default_end = pd.to_datetime('today').normalize()
+    default_start = default_end - pd.Timedelta(days=180)
+    return create_price_chart('close', default_start, default_end, show_events=True)
