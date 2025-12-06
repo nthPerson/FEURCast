@@ -569,7 +569,8 @@ def render_prediction_card(prediction):
     """
     direction = prediction['direction']
     pred_return = prediction['predicted_return'] * 100
-    confidence = prediction['confidence']
+    show_confidence = prediction.get('model_source') == 'simulated'
+    confidence_value = prediction.get('confidence', 'N/A')
 
     if direction == 'up':
         color, emoji = '#28a745', '📈'
@@ -577,6 +578,13 @@ def render_prediction_card(prediction):
         color, emoji = '#dc3545', '📉'
     else:
         color, emoji = '#ffc107', '➡️'
+
+    confidence_block = ""
+    if show_confidence:
+        confidence_block = (
+            f"<div style=\"font-size:1.05rem; font-weight:500;\">Confidence:<br>"
+            f"<span style=\"font-size:1.4rem; font-weight:700;\">{confidence_value}</span></div>"
+        )
 
     st.markdown(
         f"""
@@ -587,7 +595,7 @@ def render_prediction_card(prediction):
                     <div style="font-size:2.1rem; font-weight:800; line-height:1; margin-top:4px;">{direction.upper()}</div>
                 </div>
                 <div style="font-size:1.05rem; font-weight:500;">Expected Return:<br><span style="font-size:1.4rem; font-weight:700;">{pred_return:+.2f}%</span></div>
-                <div style="font-size:1.05rem; font-weight:500;">Confidence:<br><span style="font-size:1.4rem; font-weight:700;">{confidence}</span></div>
+                {confidence_block}
                 <div style="font-size:1.05rem; font-weight:500;">Timeframe:<br><span style="font-size:1.4rem; font-weight:700;">Next Day</span></div>
             </div>
         </div>
@@ -597,7 +605,7 @@ def render_prediction_card(prediction):
 
 
 def render_feature_importance(features):
-    header_with_info('Top Model Features', 'Shows the model\'s top features and their relative importance in the current prediction — educational, not causal.')
+    header_with_info('Top Model Features', 'Shows the model\'s top features and their relative importance in the current prediction — informational, not causal.')
     col1, col2 = st.columns([3,2])
     with col1:
         fig = create_feature_importance_chart(features)
@@ -854,12 +862,21 @@ def render_pro_mode():
 
         prediction = st.session_state.prediction_cache
         direction = prediction['direction']
+        show_confidence = prediction.get('model_source') == 'simulated'
+        confidence_value = prediction.get('confidence', 'N/A')
         if direction == 'up':
             color, emoji = '#28a745', '📈'
         elif direction == 'down':
             color, emoji = '#dc3545', '📉'
         else:
             color, emoji = '#ffc107', '➡️'
+
+        confidence_block = ""
+        if show_confidence:
+            confidence_block = (
+                f"<div style=\"font-size:0.95rem; font-weight:500;\">Confidence:<br>"
+                f"<span style=\"font-size:1.3rem; font-weight:700;\">{confidence_value}</span></div>"
+            )
 
         # Colored panel mimicking Lite card but inside expander
         st.markdown(
@@ -871,7 +888,7 @@ def render_pro_mode():
                         <div style="font-size:1.9rem; font-weight:800; line-height:1; margin-top:4px;">{direction.upper()}</div>
                     </div>
                     <div style="font-size:0.95rem; font-weight:500;">Expected Return:<br><span style="font-size:1.3rem; font-weight:700;">{prediction['predicted_return']*100:+.2f}%</span></div>
-                    <div style="font-size:0.95rem; font-weight:500;">Confidence:<br><span style="font-size:1.3rem; font-weight:700;">{prediction['confidence']}</span></div>
+                    {confidence_block}
                     <div style="font-size:0.95rem; font-weight:500;">Timeframe:<br><span style="font-size:1.3rem; font-weight:700;">Next Day</span></div>
                 </div>
             </div>
