@@ -10,6 +10,7 @@ import os
 import io
 import pandas as pd
 import html
+from pathlib import Path
 
 # Safe rerun helper to support Streamlit versions where experimental_rerun / rerun may be missing
 def safe_rerun():
@@ -404,7 +405,9 @@ def render_sidebar():
         current = st.session_state.get("page", "home")
 
         # Branding logo at top
-        st.image("./FUREcast_logo.png", width='stretch')
+        APP_DIR = Path(__file__).resolve().parent  # Get the parent directory of this file
+        LOGO_PATH = APP_DIR / "FUREcast_logo.png"
+        st.image(str(LOGO_PATH), width='stretch')
 
         # Mode toggle button only when on the Home page
         if current == "home":
