@@ -8,9 +8,11 @@ from datetime import datetime
 import sys
 import os
 import io
+import json
 import pandas as pd
 import html
 from pathlib import Path
+from typing import Any, Dict, Optional
 
 # Safe rerun helper to support Streamlit versions where experimental_rerun / rerun may be missing
 def safe_rerun():
@@ -99,13 +101,13 @@ from simulator import (
     create_sector_holdings_treemap,
     get_sector_summary,
     create_feature_importance_chart,
-    create_sector_comparison_chart,
-    get_holdings_top_n,
+    viz_from_spec,
 )
 from llm_interface import (
-    route_query,
     compose_answer,
-    explain_prediction
+    explain_prediction,
+    execute_tool_plan,
+    generate_tool_plan,
 )
 
 # Load environment variables
@@ -123,6 +125,81 @@ def get_secret(name: str, default: str = "") -> str:
         return st.secrets.get(name, default)
     except Exception:
         return default
+
+
+def _result_to_dataframe(result: Any) -> Optional[pd.DataFrame]:
+    if isinstance(result, dict):
+        records = result.get('records')
+        data = result.get('data')
+        if isinstance(records, list):
+            return pd.DataFrame(records)
+        if isinstance(data, list):
+            return pd.DataFrame(data)
+        flat_row: Dict[str, Any] = {}
+        for key, value in result.items():
+            if isinstance(value, (int, float, str, bool)) or value is None:
+                flat_row[key] = value
+            elif isinstance(value, (list, dict)):
+                try:
+                    flat_row[key] = json.dumps(value)
+                except Exception:
+                    flat_row[key] = str(value)
+        if flat_row:
+            return pd.DataFrame([flat_row])
+    elif isinstance(result, list):
+        return pd.DataFrame(result)
+    return None
+
+
+def _stringify_complex_values(df: pd.DataFrame) -> pd.DataFrame:
+    formatted = df.copy()
+
+    def _format(value: Any) -> Any:
+        if isinstance(value, list):
+            if value and all(isinstance(item, dict) for item in value):
+                if {'name', 'importance'}.issubset(value[0].keys()):
+                    lines = []
+                    for idx, item in enumerate(value, 1):
+                        name = item.get('name', 'Feature')
+                        importance = item.get('importance')
+                        if isinstance(importance, (int, float)):
+                            lines.append(f"{idx}. {name} ({importance:.2%})")
+                        else:
+                            lines.append(f"{idx}. {name}")
+                    return "\n".join(lines)
+                return json.dumps(value, indent=2)
+            return json.dumps(value, indent=2)
+        if isinstance(value, dict):
+            return json.dumps(value, indent=2)
+        return value
+
+    for column in formatted.columns:
+        formatted[column] = formatted[column].apply(_format)
+    return formatted
+
+
+def _table_from_spec(viz_plan: Dict[str, Any], tool_results: Dict[str, Any]) -> Optional[pd.DataFrame]:
+    if not isinstance(viz_plan, dict):
+        return None
+    data_key = viz_plan.get('data_key')
+    if not data_key:
+        return None
+    df = _result_to_dataframe(tool_results.get(data_key))
+    if df is None or df.empty:
+        return None
+
+    specs = viz_plan.get('specs', {}) or {}
+    columns = specs.get('columns')
+    if isinstance(columns, list) and columns:
+        existing = [c for c in columns if c in df.columns]
+        if existing:
+            df = df[existing]
+
+    top_n = specs.get('top_n')
+    if isinstance(top_n, int) and top_n > 0:
+        df = df.head(top_n)
+
+    return _stringify_complex_values(df)
 
 MARKETSENTIMENT_API_KEY = get_secret('MARKETSENTIMENT_API_KEY', '')
 FRED_KEY = get_secret('FRED_KEY', '')
@@ -488,8 +565,8 @@ def render_sidebar():
                 - Ensemble learning method combining multiple decision trees
                 - Trained on 100+ engineered features including technical indicators, sector ETF data, and market metrics
                 - Predicts next-day SPLG price movement
-                - Performance metrics available in Performance page
-                - Hyperparameters optimized via grid search with cross-validation
+                - Performance metrics available on Performance page
+                - Hyperparameters optimized via grid search with cross-validation and can be reviewed on GBR Model Details page
                 
                 **Key Features:**
                 - Historical price data (open, high, low, close, volume)
@@ -949,124 +1026,68 @@ def render_pro_mode():
     should_execute = (submit and query) or (st.session_state.execute_query and query)
     
     if should_execute:
-        # Reset the execute flag
         st.session_state.execute_query = False
         st.session_state.last_query = query
-        
+
+        plan: Dict[str, Any] = {}
         with st.spinner("Planning analysis..."):
-            # Route query and persist the raw input so users can inspect it later
-            plan = route_query(query) or {}
+            plan = generate_tool_plan(query) or {}
             plan['user_query'] = query
-        
+
         st.markdown("---")
-        
-        # Show what the system is doing
+
         with st.expander("🔧 System Plan", expanded=False):
             st.json(plan)
-        
-        # Execute tools based on plan
+
         with st.spinner("Executing analysis..."):
-            tool_results = {}
-            intent = plan.get('intent', 'general_question')
-            
-            if intent == 'market_outlook' or 'predict' in intent:
-                tool_results['prediction'] = st.session_state.prediction_cache
-            
-            if intent == 'sector_analysis' or 'sector' in query.lower():
-                tool_results['sector_data'] = {
-                    'risk_rankings': {
-                        'Consumer Staples': 'Low Risk',
-                        'Utilities': 'Low Risk',
-                        'Healthcare': 'Medium Risk',
-                        'Technology': 'High Risk',
-                        'Energy': 'High Risk'
-                    }
-                }
-            
-            if intent == 'feature_explanation' or 'feature' in query.lower() or 'influence' in query.lower():
-                tool_results['features'] = prediction['top_features']
-        
-        # Generate response
+            tool_results: Dict[str, Any] = execute_tool_plan(plan)
+
+        with st.expander("📦 Tool Results", expanded=False):
+            st.json(tool_results)
+
+        for tool in plan.get('tools', []):
+            if tool.get('name') == 'predict_splg':
+                prediction_candidate = tool_results.get(tool.get('result_key'))
+                if isinstance(prediction_candidate, dict) and prediction_candidate.get('direction'):
+                    st.session_state.prediction_cache = prediction_candidate
+                    prediction = prediction_candidate
+                    break
+
         with st.spinner("✍️ Composing answer..."):
             response = compose_answer(query, tool_results, plan)
-        
-        # Display results
+
         header_with_info('Analysis Results', 'Composed answer summarizing model outputs and tool results related to your query. Educational use only — not financial advice.')
         st.markdown(response)
-        
+
         st.markdown("---")
-        
-        # Generate visualizations based on intent
+
         header_with_info('Visualizations', 'Charts and treemaps generated to support the analysis. Interactive elements help explore model behavior and data.')
-        
         viz_plan = plan.get('visualization') or {}
-        viz_type = viz_plan.get('type', 'price')
+        viz_type = viz_plan.get('type')
+        viz_error = None
+        viz_fig = None
 
-        # If the LLM explicitly requested a table visualization (e.g. top holdings),
-        # honor that first by rendering a DataFrame derived from holdings data.
+        if viz_plan:
+            with st.spinner("Rendering visualization..."):
+                try:
+                    viz_fig = viz_from_spec(viz_plan, tool_results)
+                except Exception as exc:
+                    viz_error = str(exc)
+
         if viz_type == 'table':
-            specs = viz_plan.get('specs', {}) or {}
-            requested_columns = specs.get('columns') or []
-
-            try:
-                # Default to top 20 holdings; this can be tuned later or
-                # extended to read a "top_n" field from specs.
-                holdings_df = get_holdings_top_n(20)
-
-                # Reorder / subset according to the plan's column list when possible.
-                if requested_columns:
-                    cols_available = [c for c in requested_columns if c in holdings_df.columns]
-                    if cols_available:
-                        display_df = holdings_df[cols_available]
-                    else:
-                        display_df = holdings_df
-                else:
-                    display_df = holdings_df
-
-                st.markdown("**Top SPLG Holdings (from plan)**")
-                st.dataframe(display_df, use_container_width=True, hide_index=True)
-            except Exception as e:
-                st.warning(f"Unable to render requested table visualization: {e}")
-
-        # Keyword-based fallbacks for additional visual context
-        if 'holding' in query.lower() or 'stock' in query.lower() or 'company' in query.lower():
-            # Show detailed holdings treemap
-            st.markdown("**SPLG Holdings Drill-Down**")
-            color_metric = st.selectbox(
-                "Color by:",
-                ["DailyChangePct", "PE", "Beta", "DividendYield"],
-                index=0,
-                key="query_treemap_color"
-            )
-            fig = create_sector_holdings_treemap(color_metric=color_metric)
-            st.plotly_chart(fig, config={"width": 'stretch'}, key='sector_holdings_treemap')
-            
-            # Show summary table
-            summary_df = get_sector_summary()
-            if not summary_df.empty:
-                with st.expander("Sector Summary Table", expanded=False):
-                    st.dataframe(summary_df, width='stretch', hide_index=True)
-        
-        elif 'sector' in query.lower() and 'risk' in query.lower():
-            fig = create_sector_risk_treemap()
-            st.plotly_chart(fig, config={"width": 'stretch'}, key='sector_risk_treemap')
-        
-        elif 'compare' in query.lower() or 'performance' in query.lower():
-            # Extract sectors from query (simplified)
-            sectors = ['Technology', 'Utilities', 'Healthcare']
-            fig = create_sector_comparison_chart(sectors)
-            st.plotly_chart(fig, config={"width": 'stretch'}, key='compare_chart')
-        
-        elif 'feature' in query.lower() or 'influence' in query.lower():
-            fig = create_feature_importance_chart(prediction['top_features'])
-            st.plotly_chart(fig, config={"width": 'stretch'}, key='feature_importance_chart')
-        
+            table_df = _table_from_spec(viz_plan, tool_results)
+            if table_df is not None and not table_df.empty:
+                st.dataframe(table_df, use_container_width=True, hide_index=True)
+            else:
+                st.info("Plan requested a table, but no rows were returned for the selected data.")
+        elif viz_fig is not None:
+            st.plotly_chart(viz_fig, config={"width": 'stretch'}, key='ask_furecast_viz')
         else:
-            # Default to price chart - FIX: Add all required parameters
-            default_start = max_dataset_date - pd.Timedelta(days=180)
-            fig = create_price_chart('close', default_start, max_dataset_date, show_events=st.session_state.show_events)
-            st.plotly_chart(fig, config={"width": 'stretch'}, key='price_chart')
-    
+            st.info("The current plan did not request a visualization.")
+
+        if viz_error:
+            st.warning(f"Visualization skipped: {viz_error}")
+
     elif not query and submit:
         st.warning("Please enter a question to analyze.")
     

@@ -114,6 +114,53 @@ streamlit run app.py
 4. **Check Summary**: Scroll to see the sector summary table
 5. **Use Queries**: Try natural language queries about holdings
 
+## 🤖 Ask FUREcast Tooling Plan
+
+### Objectives
+- Keep the learning agent grounded in approved CSV data: `Financial Crisis Timeline by Day (since 2005).csv`, `investment_glossary.csv`, `holdings-with-sectors.csv`, `rich_features_SPLG_history_full.csv`, `treemap_nodes.csv`.
+- Execute the LLM “System Plan” end-to-end: run each tool, store outputs, and render the requested visualization or surface a graceful fallback.
+- Support the six Example Queries in the Ask FUREcast UI without synthetic data.
+
+### Implementation Steps
+1. **Data Access Tool** – add `query_rich_features` (no caching needed) that filters `rich_features_SPLG_history_full.csv` by dates, sectors, and columns, returning JSON-safe payloads plus warnings when filters exceed data bounds.
+2. **Planner Schema** – update `route_query` to emit `plan_version`, stricter visualization specs, and tool definitions for `query_rich_features`, `predict_splg`, `compute_risk`, `fetch_prices`, `viz_from_spec`. Reject specs that need unavailable data.
+3. **Execution Layer** – create a coordinator that iterates through the tool list, calls the simulator helpers, stores `results[data_key]`, and logs recoverable errors instead of crashing.
+4. **Visualization Factory (Complete)** – `viz_from_spec` now resolves `spec['data_key']` against executed `tool_results`, supports `price`, `line`, `bar`, `treemap`, `feature_importance`, and `table`, and validates axes/metrics/date ranges. Errors bubble up as descriptive messages so the UI can warn instead of crashing.
+5. **Sector Metrics** – derive comparisons and risk ranks from `treemap_nodes.csv` or `holdings-with-sectors.csv` (weights, beta, dividend yield, etc.) for bar charts and narratives. `compute_risk` now auto-detects when its `data_key` references the sector summary and reuses the `Beta` column to produce a volatility table so visualization specs like “columns: Sector, Volatility” succeed without extra tool juggling.
+6. **UI Integration (Complete)** – `app.py` drives Ask FUREcast via `generate_tool_plan` ➜ `execute_tool_plan`, shows raw `tool_results`, passes the `visualization` spec into `viz_from_spec`, renders tables straight from planner data, and removes keyword-based fallbacks.
+
+### Visualization Spec Schema (v1)
+```json
+{
+	"plan_version": 1,
+	"visualization": {
+		"type": "price|line|bar|treemap|feature_importance|table",
+		"data_key": "name-of-tool-result",
+		"title": "Optional chart title",
+		"specs": {
+			"x": "column name",
+			"y": "column name",
+			"group": "optional grouping column",
+			"metric": "close|open|high|low|...",
+			"start_date": "YYYY-MM-DD",
+			"end_date": "YYYY-MM-DD",
+			"sectors": ["Technology", "Utilities"],
+			"top_n": 10
+		}
+	}
+}
+```
+
+### Safety Requirements
+- Every visualization call must verify that its source CSV exists. If not, display a user-facing warning and skip the chart.
+- Specs that reference unsupported columns or missing tool results should be caught early with clear feedback (e.g., “Visualization skipped: requested metric not available in holdings data”).
+- Keep runtime exceptions from propagating to Streamlit; log the issue and fall back to text responses.
+
+### Future Enhancements
+- Extend `query_rich_features` with lightweight aggregations needed by future Example Queries (rolling averages, percentile ranks, etc.).
+- Document new spec fields inline as they are introduced and bump `plan_version` so the UI can branch safely.
+- Add automated checks (or tests) ensuring the six Example Queries run successfully after tooling changes.
+
 ## 📊 Data Overview
 
 **Total Holdings:** 305 companies
