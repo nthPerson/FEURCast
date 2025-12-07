@@ -8,6 +8,7 @@ from datetime import datetime
 import sys
 import os
 import io
+import json
 import pandas as pd
 import html
 from pathlib import Path
@@ -134,6 +135,17 @@ def _result_to_dataframe(result: Any) -> Optional[pd.DataFrame]:
             return pd.DataFrame(records)
         if isinstance(data, list):
             return pd.DataFrame(data)
+        flat_row: Dict[str, Any] = {}
+        for key, value in result.items():
+            if isinstance(value, (int, float, str, bool)) or value is None:
+                flat_row[key] = value
+            elif isinstance(value, (list, dict)):
+                try:
+                    flat_row[key] = json.dumps(value)
+                except Exception:
+                    flat_row[key] = str(value)
+        if flat_row:
+            return pd.DataFrame([flat_row])
     elif isinstance(result, list):
         return pd.DataFrame(result)
     return None
@@ -526,8 +538,8 @@ def render_sidebar():
                 - Ensemble learning method combining multiple decision trees
                 - Trained on 100+ engineered features including technical indicators, sector ETF data, and market metrics
                 - Predicts next-day SPLG price movement
-                - Performance metrics available in Performance page
-                - Hyperparameters optimized via grid search with cross-validation
+                - Performance metrics available on Performance page
+                - Hyperparameters optimized via grid search with cross-validation and can be reviewed on GBR Model Details page
                 
                 **Key Features:**
                 - Historical price data (open, high, low, close, volume)

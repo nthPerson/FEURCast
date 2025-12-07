@@ -8,7 +8,9 @@ and composing natural language responses.
 import json
 from typing import Dict, List, Any, Optional
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date as _date
+
+import numpy as np
 
 import pandas as pd
 from openai import OpenAI
@@ -199,6 +201,50 @@ def _default_plan(query: str) -> Dict[str, Any]:
     }
 
 
+def _ensure_predict_tool(plan: Dict[str, Any]) -> str:
+    tools = plan.setdefault('tools', [])
+    for tool in tools:
+        if tool.get('name') == 'predict_splg':
+            return tool.get('result_key') or 'prediction'
+
+    existing_keys = {t.get('result_key') for t in tools if t.get('result_key')}
+    base_key = 'prediction'
+    result_key = base_key
+    counter = 1
+    while result_key in existing_keys:
+        counter += 1
+        result_key = f"{base_key}_{counter}"
+
+    tools.insert(0, {'name': 'predict_splg', 'args': {}, 'result_key': result_key})
+    return result_key
+
+
+def _apply_plan_overrides(plan: Dict[str, Any]) -> Dict[str, Any]:
+    if plan.get('intent') == 'feature_explanation':
+        prediction_key = _ensure_predict_tool(plan)
+        viz = plan.get('visualization') if isinstance(plan.get('visualization'), dict) else {}
+        specs = viz.get('specs') if isinstance(viz.get('specs'), dict) else {}
+        viz.update({
+            'type': 'feature_importance',
+            'data_key': prediction_key,
+            'specs': specs
+        })
+        plan['visualization'] = viz
+    return plan
+
+
+def _json_default(value: Any) -> Any:
+    if isinstance(value, (pd.Timestamp, datetime, _date)):
+        return value.isoformat()
+    if isinstance(value, np.integer):
+        return int(value)
+    if isinstance(value, np.floating):
+        return float(value)
+    if isinstance(value, (set, tuple)):
+        return list(value)
+    return str(value)
+
+
 def compose_answer(query: str, tool_results: Dict[str, Any], plan: Dict[str, Any]) -> str:
     """
     Synthesize tool results into a natural language response.
@@ -223,7 +269,7 @@ ALWAYS include this disclaimer in your response:
 """
 
     # Format tool results for context
-    results_summary = json.dumps(tool_results, indent=2)
+    results_summary = json.dumps(tool_results, indent=2, default=_json_default)
     
     user_prompt = f"""User Query: {query}
 
@@ -263,7 +309,8 @@ def generate_tool_plan(query: str) -> Dict[str, Any]:
     High-level function that combines routing and planning.
     Returns executable tool plan.
     """
-    return route_query(query)
+    plan = route_query(query)
+    return _apply_plan_overrides(plan)
 
 
 def execute_tool_plan(plan: Dict[str, Any]) -> Dict[str, Any]:
@@ -289,10 +336,15 @@ def _invoke_tool(name: str, args: Dict[str, Any], prior_results: Dict[str, Any])
         return predict_splg(use_real_model=args.get('use_real_model', True))
 
     if name == 'query_rich_features':
+        columns_arg = args.get('columns')
+        if isinstance(columns_arg, str):
+            columns = [col.strip() for col in columns_arg.split(',') if col.strip()]
+        else:
+            columns = columns_arg
         return query_rich_features(
             start_date=args.get('start_date'),
             end_date=args.get('end_date'),
-            columns=args.get('columns'),
+            columns=columns,
             limit=int(args.get('limit', 500) or 500),
             include_summary=args.get('include_summary', True),
         )
@@ -323,7 +375,7 @@ def _invoke_tool(name: str, args: Dict[str, Any], prior_results: Dict[str, Any])
         window = int(args.get('window', 60) or 60)
         source_key = args.get('data_key')
         df = _records_to_dataframe(prior_results.get(source_key)) if source_key else None
-        if df is None:
+        if df is None or df.empty:
             slice_resp = query_rich_features(
                 start_date=args.get('start_date'),
                 end_date=args.get('end_date'),
@@ -334,9 +386,36 @@ def _invoke_tool(name: str, args: Dict[str, Any], prior_results: Dict[str, Any])
             df = _records_to_dataframe(slice_resp)
         if df is None or df.empty:
             raise ValueError('compute_risk requires price data (date, close, ticker).')
-        if 'ticker' not in df.columns:
-            df['ticker'] = 'SPLG'
-        return compute_risk(df, metric=metric, window=window)
+
+        column_map = {c.lower(): c for c in df.columns}
+        has_price_history = {'date', 'close'}.issubset(column_map)
+        has_sector_summary = 'sector' in column_map and 'beta' in column_map
+
+        if not has_price_history and has_sector_summary and metric == 'volatility':
+            sector_col = column_map['sector']
+            beta_col = column_map['beta']
+            summary_df = df[[sector_col, beta_col]].copy()
+            summary_df = summary_df.rename(columns={sector_col: 'Sector', beta_col: 'Volatility'})
+            summary_df = summary_df.dropna(subset=['Volatility']).sort_values('Volatility', ascending=False)
+            if summary_df.empty:
+                raise ValueError('compute_risk could not derive volatility from sector data: missing Beta values.')
+            return _wrap_dataframe(summary_df, args.get('source') or 'treemap_nodes.csv')
+
+        if not has_price_history:
+            raise ValueError('compute_risk needs date & close columns (or sector summary with Beta when metric=volatility).')
+
+        price_df = df.rename(columns={column_map['date']: 'date', column_map['close']: 'close'}).copy()
+        if 'ticker' not in price_df.columns:
+            price_df['ticker'] = args.get('ticker', 'SPLG')
+        metrics_map = compute_risk(price_df[['date', 'close', 'ticker']], metric=metric, window=window)
+        if not metrics_map:
+            raise ValueError('compute_risk returned no results for the requested data slice.')
+
+        metric_label = metric.title()
+        metric_df = pd.DataFrame([
+            {'Ticker': ticker, metric_label: value} for ticker, value in metrics_map.items()
+        ]).sort_values(metric_label, ascending=False)
+        return _wrap_dataframe(metric_df, args.get('source') or 'rich_features_SPLG_history_full.csv')
 
     raise ValueError(f"Unsupported tool '{name}'.")
 

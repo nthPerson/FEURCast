@@ -1061,6 +1061,10 @@ def viz_from_spec(spec: Dict[str, Any], tool_results: Optional[Dict[str, Any]] =
         features = specs.get('features')
         if not features and data_df is not None:
             features = data_df.to_dict(orient='records')
+        if not features and tool_results and data_key:
+            raw = tool_results.get(data_key)
+            if isinstance(raw, dict) and isinstance(raw.get('top_features'), list):
+                features = raw['top_features']
         if not features:
             raise ValueError('Feature importance chart requires features data.')
         return create_feature_importance_chart(features)

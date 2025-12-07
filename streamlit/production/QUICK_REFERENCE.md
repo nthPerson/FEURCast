@@ -126,7 +126,7 @@ streamlit run app.py
 2. **Planner Schema** – update `route_query` to emit `plan_version`, stricter visualization specs, and tool definitions for `query_rich_features`, `predict_splg`, `compute_risk`, `fetch_prices`, `viz_from_spec`. Reject specs that need unavailable data.
 3. **Execution Layer** – create a coordinator that iterates through the tool list, calls the simulator helpers, stores `results[data_key]`, and logs recoverable errors instead of crashing.
 4. **Visualization Factory (Complete)** – `viz_from_spec` now resolves `spec['data_key']` against executed `tool_results`, supports `price`, `line`, `bar`, `treemap`, `feature_importance`, and `table`, and validates axes/metrics/date ranges. Errors bubble up as descriptive messages so the UI can warn instead of crashing.
-5. **Sector Metrics** – derive comparisons and risk ranks from `treemap_nodes.csv` or `holdings-with-sectors.csv` (weights, beta, dividend yield, etc.) for bar charts and narratives.
+5. **Sector Metrics** – derive comparisons and risk ranks from `treemap_nodes.csv` or `holdings-with-sectors.csv` (weights, beta, dividend yield, etc.) for bar charts and narratives. `compute_risk` now auto-detects when its `data_key` references the sector summary and reuses the `Beta` column to produce a volatility table so visualization specs like “columns: Sector, Volatility” succeed without extra tool juggling.
 6. **UI Integration (Complete)** – `app.py` drives Ask FUREcast via `generate_tool_plan` ➜ `execute_tool_plan`, shows raw `tool_results`, passes the `visualization` spec into `viz_from_spec`, renders tables straight from planner data, and removes keyword-based fallbacks.
 
 ### Visualization Spec Schema (v1)
