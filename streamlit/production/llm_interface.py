@@ -43,6 +43,35 @@ DATA_SOURCES = [
     "treemap_nodes.csv",
 ]
 
+KNOWN_SECTORS = [
+    "Technology",
+    "Financial Services",
+    "Consumer Cyclical",
+    "Communication Services",
+    "Healthcare",
+    "Industrials",
+    "Consumer Defensive",
+    "Energy",
+    "Utilities",
+    "Real Estate",
+    "Basic Materials",
+]
+
+METRIC_ALIASES = {
+    'performance': 'DailyChangePct',
+    'dailychange': 'DailyChangePct',
+    'dailychangepct': 'DailyChangePct',
+    'return': 'DailyChangePct',
+    'momentum': 'DailyChangePct',
+    'volatility': 'Beta',
+    'beta': 'Beta',
+    'risk': 'Beta',
+    'weight': 'Weight (%)',
+    'allocation': 'Weight (%)',
+    'dividend': 'DividendYield',
+    'yield': 'DividendYield',
+}
+
 
 def get_openai_client():
     """Initialize OpenAI client with API key from environment"""
@@ -230,7 +259,38 @@ def _apply_plan_overrides(plan: Dict[str, Any]) -> Dict[str, Any]:
             'specs': specs
         })
         plan['visualization'] = viz
+    elif plan.get('intent') == 'sector_analysis':
+        viz = plan.get('visualization') if isinstance(plan.get('visualization'), dict) else {}
+        if viz.get('type') == 'bar':
+            specs = viz.get('specs') if isinstance(viz.get('specs'), dict) else {}
+            text_context = ' '.join(filter(None, [plan.get('user_query', ''), specs.get('title', '')]))
+            inferred_sectors = specs.get('sectors') or _extract_sectors_from_text(text_context)
+            if inferred_sectors:
+                specs['sectors'] = inferred_sectors
+                specs.setdefault('source', 'sectors')
+            specs['metric'] = _normalize_metric(specs.get('metric'))
+            specs.setdefault('title', 'Sector Comparison')
+            viz['specs'] = specs
+            plan['visualization'] = viz
     return plan
+
+
+def _normalize_metric(metric: Optional[str]) -> str:
+    if not metric:
+        return 'DailyChangePct'
+    normalized = metric.replace('%', '').replace(' ', '').lower()
+    return METRIC_ALIASES.get(normalized, metric)
+
+
+def _extract_sectors_from_text(text: str) -> List[str]:
+    if not text:
+        return []
+    text_lower = text.lower()
+    found: List[str] = []
+    for sector in KNOWN_SECTORS:
+        if sector.lower() in text_lower:
+            found.append(sector)
+    return found
 
 
 def _json_default(value: Any) -> Any:

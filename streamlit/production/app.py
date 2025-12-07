@@ -151,6 +151,33 @@ def _result_to_dataframe(result: Any) -> Optional[pd.DataFrame]:
     return None
 
 
+def _stringify_complex_values(df: pd.DataFrame) -> pd.DataFrame:
+    formatted = df.copy()
+
+    def _format(value: Any) -> Any:
+        if isinstance(value, list):
+            if value and all(isinstance(item, dict) for item in value):
+                if {'name', 'importance'}.issubset(value[0].keys()):
+                    lines = []
+                    for idx, item in enumerate(value, 1):
+                        name = item.get('name', 'Feature')
+                        importance = item.get('importance')
+                        if isinstance(importance, (int, float)):
+                            lines.append(f"{idx}. {name} ({importance:.2%})")
+                        else:
+                            lines.append(f"{idx}. {name}")
+                    return "\n".join(lines)
+                return json.dumps(value, indent=2)
+            return json.dumps(value, indent=2)
+        if isinstance(value, dict):
+            return json.dumps(value, indent=2)
+        return value
+
+    for column in formatted.columns:
+        formatted[column] = formatted[column].apply(_format)
+    return formatted
+
+
 def _table_from_spec(viz_plan: Dict[str, Any], tool_results: Dict[str, Any]) -> Optional[pd.DataFrame]:
     if not isinstance(viz_plan, dict):
         return None
@@ -172,7 +199,7 @@ def _table_from_spec(viz_plan: Dict[str, Any], tool_results: Dict[str, Any]) -> 
     if isinstance(top_n, int) and top_n > 0:
         df = df.head(top_n)
 
-    return df
+    return _stringify_complex_values(df)
 
 MARKETSENTIMENT_API_KEY = get_secret('MARKETSENTIMENT_API_KEY', '')
 FRED_KEY = get_secret('FRED_KEY', '')
