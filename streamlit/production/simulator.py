@@ -898,6 +898,50 @@ def get_sector_summary() -> pd.DataFrame:
         return pd.DataFrame()
 
 
+def get_sector_risk_table(top_n: Optional[int] = None) -> pd.DataFrame:
+    """Return a holdings-level table supporting the sector risk treemap.
+
+    The table surfaces key per-company metrics used by the SPLG Sector Risk Map
+    so users can view the underlying data. Rows are sorted by SPLG weight.
+    """
+    try:
+        df = load_treemap_nodes()
+    except FileNotFoundError:
+        return pd.DataFrame()
+
+    # Columns of interest; only keep ones that are present in the CSV
+    preferred_cols = [
+        'Company',
+        'Sector',
+        'Weight (%)',
+        'PE',
+        'Beta',
+        'DividendYield',
+        'DailyChangePct',
+    ]
+    cols = [c for c in preferred_cols if c in df.columns]
+    if not cols:
+        return pd.DataFrame()
+
+    table = df[cols].copy()
+    if 'Weight (%)' in table.columns:
+        table = table.sort_values('Weight (%)', ascending=False)
+        table['Weight (%)'] = table['Weight (%)'].round(2)
+    if 'PE' in table.columns:
+        table['PE'] = table['PE'].round(2)
+    if 'Beta' in table.columns:
+        table['Beta'] = table['Beta'].round(3)
+    if 'DividendYield' in table.columns:
+        table['DividendYield'] = table['DividendYield'].round(2)
+    if 'DailyChangePct' in table.columns:
+        table['DailyChangePct'] = table['DailyChangePct'].round(3)
+
+    if top_n:
+        table = table.head(int(top_n))
+
+    return table.reset_index(drop=True)
+
+
 def create_feature_importance_chart(features: List[Dict[str, Any]]) -> go.Figure:
     """Create bar chart of feature importances"""
     df = pd.DataFrame(features)

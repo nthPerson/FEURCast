@@ -99,6 +99,7 @@ from simulator import (
     create_price_chart,
     create_sector_risk_treemap,
     create_sector_holdings_treemap,
+    get_sector_risk_table,
     get_sector_summary,
     create_feature_importance_chart,
     viz_from_spec,
@@ -1101,6 +1102,11 @@ def render_pro_mode():
         st.markdown("**Sector Risk Treemap** - Size by market cap, color by volatility")
         fig = create_sector_risk_treemap()
         st.plotly_chart(fig, config={"width": 'stretch'}, key='sector_risk_treemap_2')
+
+        st.markdown("**Holdings (Weighted by SPLG)**")
+        risk_table = get_sector_risk_table()
+        if not risk_table.empty:
+            st.dataframe(risk_table, use_container_width=True, hide_index=True)
 
     with tab2:
         st.markdown("**SPLG Holdings Drill-Down** - Explore sectors and individual holdings")
