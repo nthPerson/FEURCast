@@ -25,6 +25,10 @@ from simulator import (
 )
 
 PLAN_VERSION = 1
+ASK_FURECAST_PLANNER_MODEL = "gpt-5-mini"
+# ASK_FURECAST_PLANNER_MODEL = "gpt-4o-mini"
+ASK_FURECAST_RESPONSE_MODEL = "gpt-5-mini"
+# ASK_FURECAST_RESPONSE_MODEL = "gpt-4o-mini"
 ALLOWED_VIS_TYPES = {"price", "line", "bar", "treemap", "feature_importance", "table"}
 ALLOWED_TOOLS = {
     "predict_splg",
@@ -144,7 +148,7 @@ Return strict JSON:
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=ASK_FURECAST_PLANNER_MODEL,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": query}
@@ -346,7 +350,7 @@ Keep your response concise (3-5 paragraphs maximum)."""
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=ASK_FURECAST_RESPONSE_MODEL,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
