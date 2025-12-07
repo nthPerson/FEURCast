@@ -25,10 +25,8 @@ from simulator import (
 )
 
 PLAN_VERSION = 1
-ASK_FURECAST_PLANNER_MODEL = "gpt-5-mini"
-# ASK_FURECAST_PLANNER_MODEL = "gpt-4o-mini"
-ASK_FURECAST_RESPONSE_MODEL = "gpt-5-mini"
-# ASK_FURECAST_RESPONSE_MODEL = "gpt-4o-mini"
+ASK_FURECAST_PLANNER_MODEL = "gpt-4o-mini"
+ASK_FURECAST_RESPONSE_MODEL = "gpt-4o-mini"
 ALLOWED_VIS_TYPES = {"price", "line", "bar", "treemap", "feature_importance", "table"}
 ALLOWED_TOOLS = {
     "predict_splg",
@@ -147,6 +145,10 @@ Return strict JSON:
 }}"""
 
     try:
+        if ASK_FURECAST_PLANNER_MODEL == "gpt-5-mini":
+            temp = 1
+        else:
+            temp = 0.3
         response = client.chat.completions.create(
             model=ASK_FURECAST_PLANNER_MODEL,
             messages=[
@@ -154,7 +156,7 @@ Return strict JSON:
                 {"role": "user", "content": query}
             ],
             response_format={"type": "json_object"},
-            temperature=0.3
+            temperature=temp
         )
         raw_plan = json.loads(response.choices[0].message.content)
         return normalize_plan(raw_plan, query)
@@ -309,6 +311,14 @@ def _json_default(value: Any) -> Any:
     return str(value)
 
 
+def _token_limit_kwargs(model_name: Optional[str], max_tokens: int) -> Dict[str, int]:
+    """Return the correct token-limit argument for the selected model."""
+    normalized = (model_name or '').lower()
+    if 'gpt-5' in normalized:
+        return {'max_completion_tokens': max_tokens}
+    return {'max_tokens': max_tokens}
+
+
 def compose_answer(query: str, tool_results: Dict[str, Any], plan: Dict[str, Any]) -> str:
     """
     Synthesize tool results into a natural language response.
@@ -349,23 +359,31 @@ Provide a helpful, educational response that:
 Keep your response concise (3-5 paragraphs maximum)."""
 
     try:
+        if ASK_FURECAST_RESPONSE_MODEL == "gpt-5-mini":
+            temp = 1
+        else:
+            temp = 0.3
+        token_kwargs = _token_limit_kwargs(ASK_FURECAST_RESPONSE_MODEL, 500)
         response = client.chat.completions.create(
             model=ASK_FURECAST_RESPONSE_MODEL,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            temperature=0.7,
-            max_tokens=500
+            temperature=temp,
+            **token_kwargs
         )
         
         return response.choices[0].message.content
-    except Exception as e:
-        return f"""I encountered an error processing your query. Here's what I found from the data:
-
-{json.dumps(tool_results, indent=2)}
-
-⚠️ This analysis is for educational purposes only and does not constitute financial advice."""
+    except Exception as exc:
+        serialized_results = json.dumps(tool_results, indent=2, default=_json_default)
+        error_details = str(exc)
+        return (
+            "I encountered an error processing your query. Here's what I found from the data:\n\n"
+            f"Error details: {error_details}\n"
+            f"{serialized_results}\n\n"
+            "⚠️ This analysis is for educational purposes only and does not constitute financial advice."
+        )
 
 
 def generate_tool_plan(query: str) -> Dict[str, Any]:
@@ -539,11 +557,16 @@ Focus on what these features suggest about market conditions and why the model m
 Keep it educational and accessible."""
 
     try:
+        if ASK_FURECAST_RESPONSE_MODEL == "gpt-5-mini":
+            temp = 1
+        else:
+            temp = 0.3
+        token_kwargs = _token_limit_kwargs(ASK_FURECAST_RESPONSE_MODEL, 150)
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=ASK_FURECAST_RESPONSE_MODEL,
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.7,
-            max_tokens=150
+            temperature=temp,
+            **token_kwargs
         )
         
         return response.choices[0].message.content
