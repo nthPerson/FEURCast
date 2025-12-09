@@ -140,7 +140,7 @@ All plots are saved in the `plots/` directory:
 ### Integration with Streamlit App
 - ✅ Prediction interface implemented (`predict.py`)
 - ✅ Feature extraction module implemented (`get_latest_features.py`)
-- ✅ Simulator integration completed (`simulator.py`)
+- ✅ Simulator integration completed (`tools.py`)
 - ⏳ Model training pending
 
 ### Production Readiness

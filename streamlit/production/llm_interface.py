@@ -15,7 +15,7 @@ import numpy as np
 import pandas as pd
 from openai import OpenAI
 
-from simulator import (
+from tools import (
     predict_splg,
     fetch_prices,
     compute_risk,
@@ -413,7 +413,7 @@ def execute_tool_plan(plan: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _invoke_tool(name: str, args: Dict[str, Any], prior_results: Dict[str, Any]) -> Any:
-    """Map planner tool names to simulator helpers with input validation."""
+    """Map planner tool names to tools helpers with input validation."""
     if name == 'predict_splg':
         return predict_splg(use_real_model=args.get('use_real_model', True))
 

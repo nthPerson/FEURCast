@@ -163,10 +163,10 @@ python predict.py
 
 ## Usage in Streamlit Application
 
-The trained model is automatically integrated into the Streamlit app via `simulator.py`:
+The trained model is automatically integrated into the Streamlit app via `tools.py`:
 
 ```python
-# In simulator.py
+# In tools.py
 prediction = predict_splg(use_real_model=True)
 
 # Returns:

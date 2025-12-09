@@ -94,7 +94,7 @@ def render_glossary_page():
 from pred_model import get_latest_date_in_dataset
 
 # Import from production package modules
-from simulator import (
+from tools import (
     predict_splg,
     create_price_chart,
     create_sector_risk_treemap,
@@ -489,12 +489,12 @@ def render_top_nav():
     for (base_label, key), col in zip(nav_items, cols):
         # Home button simply routes to the last-used mode for the Home page
         if key == "home":
-            clicked = col.button("Home", key=f"topnav_{key}", use_container_width=True)
+            clicked = col.button("Home", key=f"topnav_{key}", width='stretch')
             if clicked:
                 st.session_state.page = "home"
                 safe_rerun()
         else:
-            clicked = col.button(base_label, key=f"topnav_{key}", use_container_width=True)
+            clicked = col.button(base_label, key=f"topnav_{key}", width='stretch')
             if clicked:
                 st.session_state.page = key
                 safe_rerun()
@@ -521,7 +521,7 @@ def render_sidebar():
                 toggle_label = "Click Here for Lite Mode 🚀"
                 next_mode = "Lite"
 
-            if st.button(toggle_label, key="sidebar_mode_toggle", use_container_width=True):
+            if st.button(toggle_label, key="sidebar_mode_toggle", width='stretch'):
                 st.session_state.mode = next_mode
                 st.session_state.page = "home"
                 safe_rerun()
@@ -535,7 +535,7 @@ def render_sidebar():
                 "GBR_architecture_diagram.png",
             )
             if os.path.isfile(gbr_img_path):
-                st.image(gbr_img_path, caption="GBR Model Architecture", use_container_width=True)
+                st.image(gbr_img_path, caption="GBR Model Architecture", width='stretch')
 
         if current in ("home", "performance"):
             st.markdown("### ℹ️ About FUREcast")
@@ -1009,9 +1009,9 @@ def render_pro_mode():
     # Example queries
     with st.expander("Example Queries"):
         examples = [
-            "Is now a good time to invest in SPLG?",
-            "Which sectors look stable this quarter?",
             "Compare Technology vs Utilities performance",
+            "Which sectors look stable this quarter?",
+            "Is now a good time to invest in SPLG?",
             "Show me the top holdings in SPLG",
             "What influenced today's prediction?",
             "What sectors have the highest risk?"
@@ -1019,7 +1019,7 @@ def render_pro_mode():
         cols = st.columns(2)
         for i, example in enumerate(examples):
             with cols[i % 2]:
-                if st.button(example, key=f"example_query_button_{i}", use_container_width=True):
+                if st.button(example, key=f"example_query_button_{i}", width='stretch'):
                     st.session_state.last_query = example
                     st.session_state.execute_query = True
                     st.rerun()
@@ -1035,9 +1035,9 @@ def render_pro_mode():
     
     col1, col2 = st.columns([1, 5])
     with col1:
-        submit = st.button("Analyze", type="primary", use_container_width=True, key="analyze_button")
+        submit = st.button("Analyze", type="primary", width='stretch', key="analyze_button")
     with col2:
-        if st.button("Clear", use_container_width=True, key="clear_button"):
+        if st.button("Clear", width='stretch', key="clear_button"):
             st.session_state.last_query = ""
             st.session_state.execute_query = False
             st.rerun()
@@ -1076,12 +1076,12 @@ def render_pro_mode():
         with st.spinner("✍️ Composing answer..."):
             response = compose_answer(query, tool_results, plan)
 
-        header_with_info('Analysis Results', 'Composed answer summarizing model outputs and tool results related to your query. Educational use only — not financial advice.')
+        header_with_info('Agent Insight: Narrative Response', 'Composed answer summarizing model outputs and tool results related to your query. Educational use only — not financial advice.')
         st.markdown(response)
 
         st.markdown("---")
 
-        header_with_info('Visualizations', 'Charts and treemaps generated to support the analysis. Interactive elements help explore model behavior and data.')
+        header_with_info('Agent Insight: Visual Response', 'Charts and treemaps generated to support the analysis. Interactive elements help explore model behavior and data.')
         viz_plan = plan.get('visualization') or {}
         viz_type = viz_plan.get('type')
         viz_error = None
@@ -1097,7 +1097,7 @@ def render_pro_mode():
         if viz_type == 'table':
             table_df = _table_from_spec(viz_plan, tool_results)
             if table_df is not None and not table_df.empty:
-                st.dataframe(table_df, use_container_width=True, hide_index=True)
+                st.dataframe(table_df, width='stretch', hide_index=True)
             else:
                 st.info("Plan requested a table, but no rows were returned for the selected data.")
         elif viz_fig is not None:
@@ -1125,7 +1125,7 @@ def render_pro_mode():
         st.markdown("**Holdings (Weighted by SPLG)**")
         risk_table = get_sector_risk_table()
         if not risk_table.empty:
-            st.dataframe(risk_table, use_container_width=True, hide_index=True)
+            st.dataframe(risk_table, width='stretch', hide_index=True)
 
     with tab2:
         st.markdown("**SPLG Holdings Drill-Down** - Explore sectors and individual holdings")
@@ -1338,7 +1338,7 @@ def render_performance_page():
                     buf = io.BytesIO()
                     content.savefig(buf, format="png", bbox_inches="tight")
                     buf.seek(0)
-                    st.image(buf, use_container_width=True)
+                    st.image(buf, width='stretch')
                     buf.close()
                     continue
             except Exception:
@@ -1347,19 +1347,19 @@ def render_performance_page():
             # Plotly figure
             try:
                 if isinstance(content, go.Figure):
-                    st.plotly_chart(content, use_container_width=True)
+                    st.plotly_chart(content, width='stretch')
                     continue
             except Exception:
                 pass
 
             # PNG file path
             if isinstance(content, str) and os.path.isfile(content):
-                st.image(content, use_container_width=True)
+                st.image(content, width='stretch')
                 continue
 
             # bytes / raw image
             if isinstance(content, (bytes, bytearray)):
-                st.image(content, use_container_width=True)
+                st.image(content, width='stretch')
                 continue
 
             st.warning(f"Could not render plot: {label}")
@@ -1415,7 +1415,7 @@ def render_performance_page():
             if financial_metrics_data:
                 import pandas as pd
                 fin_df = pd.DataFrame(financial_metrics_data)
-                st.dataframe(fin_df, use_container_width=True, hide_index=True)
+                st.dataframe(fin_df, width='stretch', hide_index=True)
             else:
                 st.info("No financial metrics available in metrics.json.")
         else:
@@ -1478,7 +1478,7 @@ def render_performance_page():
             if regression_metrics_data:
                 import pandas as pd
                 reg_df = pd.DataFrame(regression_metrics_data)
-                st.dataframe(reg_df, use_container_width=True, hide_index=True)
+                st.dataframe(reg_df, width='stretch', hide_index=True)
             else:
                 st.info("No regression metrics available in the test object.")
         else:
@@ -1505,7 +1505,7 @@ def render_performance_page_dynamic():
             buf = io.BytesIO()
             fig.savefig(buf, format='png', bbox_inches='tight')
             buf.seek(0)
-            st.image(buf, use_container_width=True)
+            st.image(buf, width='stretch')
             buf.close()
     except Exception as e:
         st.error(f"Could not generate plots dynamically: {e}")
@@ -1650,7 +1650,7 @@ def render_gbr_model_details_page():
         else:
             display_features = features_table
 
-        st.dataframe(display_features, use_container_width=True, hide_index=True)
+        st.dataframe(display_features, width='stretch', hide_index=True)
 
         # Download CSV for features table
         csv_bytes = display_features.to_csv(index=False).encode("utf-8")
@@ -1683,7 +1683,7 @@ def render_gbr_model_details_page():
             display_hyper = hyper_df[mask].reset_index(drop=True)
         else:
             display_hyper = hyper_df
-        st.dataframe(display_hyper, use_container_width=True, hide_index=True)
+        st.dataframe(display_hyper, width='stretch', hide_index=True)
 
         # Download CSV for hyperparameters table
         hyper_csv_bytes = display_hyper.to_csv(index=False).encode("utf-8")
