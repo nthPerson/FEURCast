@@ -1009,9 +1009,9 @@ def render_pro_mode():
     # Example queries
     with st.expander("Example Queries"):
         examples = [
-            "Is now a good time to invest in SPLG?",
-            "Which sectors look stable this quarter?",
             "Compare Technology vs Utilities performance",
+            "Which sectors look stable this quarter?",
+            "Is now a good time to invest in SPLG?",
             "Show me the top holdings in SPLG",
             "What influenced today's prediction?",
             "What sectors have the highest risk?"
@@ -1076,12 +1076,12 @@ def render_pro_mode():
         with st.spinner("✍️ Composing answer..."):
             response = compose_answer(query, tool_results, plan)
 
-        header_with_info('Analysis Results', 'Composed answer summarizing model outputs and tool results related to your query. Educational use only — not financial advice.')
+        header_with_info('Agent Insight: Narrative Response', 'Composed answer summarizing model outputs and tool results related to your query. Educational use only — not financial advice.')
         st.markdown(response)
 
         st.markdown("---")
 
-        header_with_info('Visualizations', 'Charts and treemaps generated to support the analysis. Interactive elements help explore model behavior and data.')
+        header_with_info('Agent Insight: Visual Response', 'Charts and treemaps generated to support the analysis. Interactive elements help explore model behavior and data.')
         viz_plan = plan.get('visualization') or {}
         viz_type = viz_plan.get('type')
         viz_error = None
