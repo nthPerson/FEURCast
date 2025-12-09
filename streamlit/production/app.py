@@ -118,6 +118,25 @@ try:
 except Exception:
     pass
 
+
+# CLI toggle: allow forcing simulated model via `streamlit run app.py --simulated`
+SIM_MODEL_FLAGS = {"--simulated", "--force-simulated", "--simulate-model"}
+
+
+def _apply_cli_overrides():
+    """Set env flags based on CLI args; no effect in hosted Streamlit unless flags are present."""
+    try:
+        args = sys.argv[1:]
+    except Exception:
+        return
+    for arg in args:
+        if arg in SIM_MODEL_FLAGS:
+            os.environ["FURECAST_FORCE_SIMULATED"] = "1"
+            break
+
+
+_apply_cli_overrides()
+
 def get_secret(name: str, default: str = "") -> str:
     val = os.getenv(name)
     if val:

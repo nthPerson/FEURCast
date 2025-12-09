@@ -1,8 +1,8 @@
 """
 FUREcast - Simulated Data & Tool Functions
 
-This module provides simulated versions of the core tools that will eventually
-connect to real models, APIs, and databases. It demonstrates the data structures
+This module provides real and simulated versions of the core tools that are used to
+connect to prediction models, APIs, and databases. It implements the data structures
 and interfaces the LLM will interact with.
 """
 
@@ -14,6 +14,15 @@ import plotly.express as px
 from typing import Dict, List, Any, Optional, Union
 import os
 from openai import OpenAI
+
+
+FORCE_SIMULATED_ENV_FLAG = "FURECAST_FORCE_SIMULATED"
+
+
+def _force_simulated_enabled() -> bool:
+    """Return True when the env flag requests the simulated prediction path."""
+    raw = os.getenv(FORCE_SIMULATED_ENV_FLAG, "")
+    return raw.strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
 def get_holdings_top_n(n: int = 20) -> pd.DataFrame:
@@ -353,7 +362,13 @@ def predict_splg(use_real_model: bool = True) -> Dict[str, Any]:
         - confidence: float
         - top_features: list of {name, importance} dicts
     """
-    if use_real_model:
+    force_simulated = _force_simulated_enabled()
+    effective_use_real = use_real_model and not force_simulated
+
+    if force_simulated:
+        print("INFO - Simulated model forced via CLI/env flag; skipping real model load.")
+
+    if effective_use_real:
         try:
             # Import from pred_model package using relative import
             from pred_model.predict import load_model, predict_with_explanation
@@ -384,12 +399,12 @@ def predict_splg(use_real_model: bool = True) -> Dict[str, Any]:
             # Model not trained yet, fall back to simulated
             print(f"⚠️ Trained model not found: {e}")
             print("   To train: cd pred_model && python scripts/train_gbr_model.py --quick")
-            use_real_model = False
+            effective_use_real = False
         except Exception as e:
             print(f"⚠️ Error loading model: {e}")
-            use_real_model = False
+            effective_use_real = False
     
-    if not use_real_model:
+    if not effective_use_real:
         # Simulated prediction (fallback)
         client = get_openai_client()
         
