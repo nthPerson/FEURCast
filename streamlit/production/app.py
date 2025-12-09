@@ -660,14 +660,9 @@ def render_sidebar():
 
 # ---------- LITE MODE ----------
 def render_prediction_card(prediction):
-    """Render a full-width colored prediction card (Lite mode).
-    Card now includes direction, expected return, confidence and timeframe
-    inside a single uniformly colored panel, matching Pro mode styling.
-    """
+    """Render a full-width colored prediction card (Lite mode)."""
     direction = prediction['direction']
     pred_return = prediction['predicted_return'] * 100
-    show_confidence = prediction.get('model_source') == 'simulated'
-    confidence_value = prediction.get('confidence', 'N/A')
 
     if direction == 'up':
         color, emoji = '#28a745', '📈'
@@ -675,14 +670,6 @@ def render_prediction_card(prediction):
         color, emoji = '#dc3545', '📉'
     else:
         color, emoji = '#ffc107', '➡️'
-
-    confidence_block = ""
-    if show_confidence:
-        confidence_block = (
-            "\n                "
-            f"<div style=\"font-size:1.05rem; font-weight:500;\">Confidence:<br>"
-            f"<span style=\"font-size:1.4rem; font-weight:700;\">{confidence_value}</span></div>"
-        )
 
     st.markdown(
         f"""
@@ -692,7 +679,7 @@ def render_prediction_card(prediction):
                     <div style="font-size:1.1rem; font-weight:600;">{emoji} Model Prediction</div>
                     <div style="font-size:2.1rem; font-weight:800; line-height:1; margin-top:4px;">{direction.upper()}</div>
                 </div>
-                <div style="font-size:1.05rem; font-weight:500;">Expected Return:<br><span style="font-size:1.4rem; font-weight:700;">{pred_return:+.2f}%</span></div>{confidence_block}
+                <div style="font-size:1.05rem; font-weight:500;">Expected Return:<br><span style="font-size:1.4rem; font-weight:700;">{pred_return:+.2f}%</span></div>
                 <div style="font-size:1.05rem; font-weight:500;">Timeframe:<br><span style="font-size:1.4rem; font-weight:700;">Next Day</span></div>
             </div>
         </div>
@@ -959,22 +946,12 @@ def render_pro_mode():
 
         prediction = st.session_state.prediction_cache
         direction = prediction['direction']
-        show_confidence = prediction.get('model_source') == 'simulated'
-        confidence_value = prediction.get('confidence', 'N/A')
         if direction == 'up':
             color, emoji = '#28a745', '📈'
         elif direction == 'down':
             color, emoji = '#dc3545', '📉'
         else:
             color, emoji = '#ffc107', '➡️'
-
-        confidence_block = ""
-        if show_confidence:
-            confidence_block = (
-                "\n                    "
-                f"<div style=\"font-size:0.95rem; font-weight:500;\">Confidence:<br>"
-                f"<span style=\"font-size:1.3rem; font-weight:700;\">{confidence_value}</span></div>"
-            )
 
         # Colored panel mimicking Lite card but inside expander
         st.markdown(
@@ -985,7 +962,7 @@ def render_pro_mode():
                         <div style="font-size:1.0rem; font-weight:600;">{emoji} Prediction</div>
                         <div style="font-size:1.9rem; font-weight:800; line-height:1; margin-top:4px;">{direction.upper()}</div>
                     </div>
-                    <div style="font-size:0.95rem; font-weight:500;">Expected Return:<br><span style="font-size:1.3rem; font-weight:700;">{prediction['predicted_return']*100:+.2f}%</span></div>{confidence_block}
+                    <div style="font-size:0.95rem; font-weight:500;">Expected Return:<br><span style="font-size:1.3rem; font-weight:700;">{prediction['predicted_return']*100:+.2f}%</span></div>
                     <div style="font-size:0.95rem; font-weight:500;">Timeframe:<br><span style="font-size:1.3rem; font-weight:700;">Next Day</span></div>
                 </div>
             </div>
