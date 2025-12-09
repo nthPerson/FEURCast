@@ -344,6 +344,7 @@ def initialize_session_state():
     if 'prediction_cache' not in st.session_state: st.session_state.prediction_cache = None
     if 'last_query' not in st.session_state: st.session_state.last_query = ""
     if 'execute_query' not in st.session_state: st.session_state.execute_query = False
+    if 'force_simulated' not in st.session_state: st.session_state.force_simulated = False
     # Metric display names to DataFrame column mapping
     if 'metric_mapping' not in st.session_state:
         st.session_state.metric_mapping = {
@@ -863,13 +864,13 @@ def render_lite_mode():
 
     # --- Run model prediction ---
     if st.session_state.prediction_cache is None:
-        st.session_state.prediction_cache = predict_splg()
+        st.session_state.prediction_cache = predict_splg(use_real_model=not st.session_state.force_simulated)
     prediction = st.session_state.prediction_cache
 
     # Show refresh button only if using simulated model
     if prediction.get('model_source') == 'simulated':
         if st.button("🔄 Refresh Prediction", key="refresh_lite"):
-            st.session_state.prediction_cache = predict_splg()
+            st.session_state.prediction_cache = predict_splg(use_real_model=not st.session_state.force_simulated)
             prediction = st.session_state.prediction_cache
 
     render_prediction_card(prediction)
@@ -924,6 +925,16 @@ def render_lite_mode():
     # 3. Compare with recent price trends  
     # """)
 
+    # Simulated model toggle (Lite mode)
+    if not st.session_state.force_simulated:
+        if st.button("Click Here to Simulate Model Predictions", key="force_simulated_button"):
+            st.session_state.force_simulated = True
+            st.session_state.prediction_cache = None
+            st.success("Simulated model enabled for this session. Predictions will now use the simulated model.")
+            safe_rerun()
+    else:
+        st.info("Simulated model is active for this session. Use Refresh to see varied predictions.")
+
 
 # ---------- PRO MODE ----------
 def render_pro_mode():
@@ -942,7 +953,7 @@ def render_pro_mode():
     with st.expander("Current SPLG Prediction", expanded=True):
         if st.session_state.prediction_cache is None:
             with st.spinner("Generating prediction..."):
-                st.session_state.prediction_cache = predict_splg()
+                st.session_state.prediction_cache = predict_splg(use_real_model=not st.session_state.force_simulated)
 
         prediction = st.session_state.prediction_cache
         direction = prediction['direction']
@@ -972,7 +983,7 @@ def render_pro_mode():
         # Conditional refresh button only if simulated
         if prediction.get('model_source') == 'simulated':
             if st.button("🔄 Refresh Prediction", key="pro_refresh_button"):
-                st.session_state.prediction_cache = predict_splg()
+                st.session_state.prediction_cache = predict_splg(use_real_model=not st.session_state.force_simulated)
                 safe_rerun()
     
     st.markdown("---")
@@ -1145,6 +1156,16 @@ def render_pro_mode():
                 st.info(explanation)
             except:
                 st.info("Technical indicators drive the model's predictions by capturing market momentum, trends, and volatility patterns.")
+
+    # Simulated model toggle (Pro mode)
+    if not st.session_state.force_simulated:
+        if st.button("Click Here to Simulate Model Predictions", key="force_simulated_button"):
+            st.session_state.force_simulated = True
+            st.session_state.prediction_cache = None
+            st.success("Simulated model enabled for this session. Predictions will now use the simulated model.")
+            safe_rerun()
+    else:
+        st.info("Simulated model is active for this session. Use Refresh to see varied predictions.")
 
 
 
