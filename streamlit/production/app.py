@@ -344,6 +344,7 @@ def initialize_session_state():
     if 'prediction_cache' not in st.session_state: st.session_state.prediction_cache = None
     if 'last_query' not in st.session_state: st.session_state.last_query = ""
     if 'execute_query' not in st.session_state: st.session_state.execute_query = False
+    if 'force_simulated' not in st.session_state: st.session_state.force_simulated = False
     # Metric display names to DataFrame column mapping
     if 'metric_mapping' not in st.session_state:
         st.session_state.metric_mapping = {
@@ -660,14 +661,9 @@ def render_sidebar():
 
 # ---------- LITE MODE ----------
 def render_prediction_card(prediction):
-    """Render a full-width colored prediction card (Lite mode).
-    Card now includes direction, expected return, confidence and timeframe
-    inside a single uniformly colored panel, matching Pro mode styling.
-    """
+    """Render a full-width colored prediction card (Lite mode)."""
     direction = prediction['direction']
     pred_return = prediction['predicted_return'] * 100
-    show_confidence = prediction.get('model_source') == 'simulated'
-    confidence_value = prediction.get('confidence', 'N/A')
 
     if direction == 'up':
         color, emoji = '#28a745', '📈'
@@ -675,14 +671,6 @@ def render_prediction_card(prediction):
         color, emoji = '#dc3545', '📉'
     else:
         color, emoji = '#ffc107', '➡️'
-
-    confidence_block = ""
-    if show_confidence:
-        confidence_block = (
-            "\n                "
-            f"<div style=\"font-size:1.05rem; font-weight:500;\">Confidence:<br>"
-            f"<span style=\"font-size:1.4rem; font-weight:700;\">{confidence_value}</span></div>"
-        )
 
     st.markdown(
         f"""
@@ -692,7 +680,7 @@ def render_prediction_card(prediction):
                     <div style="font-size:1.1rem; font-weight:600;">{emoji} Model Prediction</div>
                     <div style="font-size:2.1rem; font-weight:800; line-height:1; margin-top:4px;">{direction.upper()}</div>
                 </div>
-                <div style="font-size:1.05rem; font-weight:500;">Expected Return:<br><span style="font-size:1.4rem; font-weight:700;">{pred_return:+.2f}%</span></div>{confidence_block}
+                <div style="font-size:1.05rem; font-weight:500;">Expected Return:<br><span style="font-size:1.4rem; font-weight:700;">{pred_return:+.2f}%</span></div>
                 <div style="font-size:1.05rem; font-weight:500;">Timeframe:<br><span style="font-size:1.4rem; font-weight:700;">Next Day</span></div>
             </div>
         </div>
@@ -876,13 +864,13 @@ def render_lite_mode():
 
     # --- Run model prediction ---
     if st.session_state.prediction_cache is None:
-        st.session_state.prediction_cache = predict_splg()
+        st.session_state.prediction_cache = predict_splg(use_real_model=not st.session_state.force_simulated)
     prediction = st.session_state.prediction_cache
 
     # Show refresh button only if using simulated model
     if prediction.get('model_source') == 'simulated':
         if st.button("🔄 Refresh Prediction", key="refresh_lite"):
-            st.session_state.prediction_cache = predict_splg()
+            st.session_state.prediction_cache = predict_splg(use_real_model=not st.session_state.force_simulated)
             prediction = st.session_state.prediction_cache
 
     render_prediction_card(prediction)
@@ -937,6 +925,16 @@ def render_lite_mode():
     # 3. Compare with recent price trends  
     # """)
 
+    # Simulated model toggle (Lite mode)
+    if not st.session_state.force_simulated:
+        if st.button("Click Here to Simulate Model Predictions", key="force_simulated_button"):
+            st.session_state.force_simulated = True
+            st.session_state.prediction_cache = None
+            st.success("Simulated model enabled for this session. Predictions will now use the simulated model.")
+            safe_rerun()
+    else:
+        st.info("Simulated model is active for this session. Use Refresh to see varied predictions.")
+
 
 # ---------- PRO MODE ----------
 def render_pro_mode():
@@ -955,26 +953,16 @@ def render_pro_mode():
     with st.expander("Current SPLG Prediction", expanded=True):
         if st.session_state.prediction_cache is None:
             with st.spinner("Generating prediction..."):
-                st.session_state.prediction_cache = predict_splg()
+                st.session_state.prediction_cache = predict_splg(use_real_model=not st.session_state.force_simulated)
 
         prediction = st.session_state.prediction_cache
         direction = prediction['direction']
-        show_confidence = prediction.get('model_source') == 'simulated'
-        confidence_value = prediction.get('confidence', 'N/A')
         if direction == 'up':
             color, emoji = '#28a745', '📈'
         elif direction == 'down':
             color, emoji = '#dc3545', '📉'
         else:
             color, emoji = '#ffc107', '➡️'
-
-        confidence_block = ""
-        if show_confidence:
-            confidence_block = (
-                "\n                    "
-                f"<div style=\"font-size:0.95rem; font-weight:500;\">Confidence:<br>"
-                f"<span style=\"font-size:1.3rem; font-weight:700;\">{confidence_value}</span></div>"
-            )
 
         # Colored panel mimicking Lite card but inside expander
         st.markdown(
@@ -985,7 +973,7 @@ def render_pro_mode():
                         <div style="font-size:1.0rem; font-weight:600;">{emoji} Prediction</div>
                         <div style="font-size:1.9rem; font-weight:800; line-height:1; margin-top:4px;">{direction.upper()}</div>
                     </div>
-                    <div style="font-size:0.95rem; font-weight:500;">Expected Return:<br><span style="font-size:1.3rem; font-weight:700;">{prediction['predicted_return']*100:+.2f}%</span></div>{confidence_block}
+                    <div style="font-size:0.95rem; font-weight:500;">Expected Return:<br><span style="font-size:1.3rem; font-weight:700;">{prediction['predicted_return']*100:+.2f}%</span></div>
                     <div style="font-size:0.95rem; font-weight:500;">Timeframe:<br><span style="font-size:1.3rem; font-weight:700;">Next Day</span></div>
                 </div>
             </div>
@@ -995,7 +983,7 @@ def render_pro_mode():
         # Conditional refresh button only if simulated
         if prediction.get('model_source') == 'simulated':
             if st.button("🔄 Refresh Prediction", key="pro_refresh_button"):
-                st.session_state.prediction_cache = predict_splg()
+                st.session_state.prediction_cache = predict_splg(use_real_model=not st.session_state.force_simulated)
                 safe_rerun()
     
     st.markdown("---")
@@ -1168,6 +1156,16 @@ def render_pro_mode():
                 st.info(explanation)
             except:
                 st.info("Technical indicators drive the model's predictions by capturing market momentum, trends, and volatility patterns.")
+
+    # Simulated model toggle (Pro mode)
+    if not st.session_state.force_simulated:
+        if st.button("Click Here to Simulate Model Predictions", key="force_simulated_button"):
+            st.session_state.force_simulated = True
+            st.session_state.prediction_cache = None
+            st.success("Simulated model enabled for this session. Predictions will now use the simulated model.")
+            safe_rerun()
+    else:
+        st.info("Simulated model is active for this session. Use Refresh to see varied predictions.")
 
 
 

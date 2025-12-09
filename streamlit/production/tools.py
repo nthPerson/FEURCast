@@ -407,12 +407,12 @@ def predict_splg(use_real_model: bool = True) -> Dict[str, Any]:
     if not effective_use_real:
         # Simulated prediction (fallback)
         client = get_openai_client()
-        
+        result: Dict[str, Any] = {}
+
         prompt = """Generate a realistic stock market prediction for SPLG ETF (S&P 500 Large Cap).
 Return a JSON object with:
 - predicted_return: float between -0.02 and 0.02 (next day % return)
 - direction: "up", "down", or "neutral" (based on return)
-- confidence: float between 0.5 and 0.95
 - top_features: array of 5 objects with {name: string, importance: float 0-1}
 
 Make the prediction realistic based on current market conditions. Features should be technical indicators like MA_20, RSI, Volatility_5d, etc."""
@@ -424,28 +424,14 @@ Make the prediction realistic based on current market conditions. Features shoul
                 response_format={"type": "json_object"},
                 temperature=0.7
             )
-            
+
             import json
             result = json.loads(response.choices[0].message.content)
-            
-            # Ensure direction matches return sign
-            pred_return = result.get('predicted_return', 0)
-            if pred_return > 0.002:
-                result['direction'] = 'up'
-            elif pred_return < -0.002:
-                result['direction'] = 'down'
-            else:
-                result['direction'] = 'neutral'
-                
-            # Tag as simulated so UI can conditionally show refresh button
-            result['model_source'] = 'simulated'
-            return result
-        except Exception as e:
+        except Exception:
             # Fallback to static data if API fails
-            return {
+            result = {
                 'predicted_return': 0.0035,
                 'direction': 'up',
-                'confidence': 0.72,
                 'top_features': [
                     {'name': 'MA_20_deviation', 'importance': 0.23},
                     {'name': 'RSI_14', 'importance': 0.18},
@@ -453,8 +439,33 @@ Make the prediction realistic based on current market conditions. Features shoul
                     {'name': 'MACD_signal', 'importance': 0.12},
                     {'name': 'Volume_ratio', 'importance': 0.09}
                 ],
-                'model_source': 'simulated'
             }
+
+        # Equal-probability direction selection with realistic return ranges
+        direction = np.random.choice(['up', 'neutral', 'down'])
+        if direction == 'up':
+            pred_return = float(np.random.uniform(0.001, 0.015))
+        elif direction == 'down':
+            pred_return = float(-np.random.uniform(0.001, 0.015))
+        else:
+            pred_return = float(np.random.uniform(-0.0025, 0.0025))
+
+        result['direction'] = direction
+        result['predicted_return'] = pred_return
+        result.pop('confidence', None)
+        result['model_source'] = 'simulated'
+
+        # Ensure top_features exist even if the LLM call failed or omitted them
+        if not result.get('top_features'):
+            result['top_features'] = [
+                {'name': 'MA_20_deviation', 'importance': 0.22},
+                {'name': 'RSI_14', 'importance': 0.18},
+                {'name': 'Volatility_5d', 'importance': 0.15},
+                {'name': 'MACD_signal', 'importance': 0.12},
+                {'name': 'Volume_ratio', 'importance': 0.10},
+            ]
+
+        return result
 def create_price_chart(metric, start_date, end_date, show_events: bool = True):
     # Mapping between display names and DataFrame columns
     metric_mapping = {
