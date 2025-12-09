@@ -5,7 +5,7 @@ Successfully integrated the SPLG holdings treemap visualization into the FUREcas
 
 ## Changes Made
 
-### 1. Added New Functions to `simulator.py`
+### 1. Added New Functions to `tools.py`
 
 #### `create_sector_holdings_treemap(color_metric='DailyChangePct')`
 - **Purpose**: Creates an interactive drill-down treemap showing Sector → Company structure
@@ -101,7 +101,7 @@ The treemap uses the following data from `treemap_nodes.csv`:
 ```
 /streamlit/production/
 ├── app.py                          # Updated with new treemap integration
-├── simulator.py                    # Added treemap functions
+├── tools.py                    # Added treemap functions
 └── sector_treemap/
     └── treemap.py                  # Original (kept for reference)
 

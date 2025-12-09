@@ -11,10 +11,10 @@ sys.path.insert(0, '/home/robert/FEURCast/streamlit/production')
 
 print("🔍 Verifying Treemap Integration...\n")
 
-# Test 1: Import simulator functions
-print("[1/5] Testing imports from simulator.py...")
+# Test 1: Import tools functions
+print("[1/5] Testing imports from tools.py...")
 try:
-    from simulator import (
+    from tools import (
         create_sector_holdings_treemap,
         get_sector_summary,
         create_sector_risk_treemap

@@ -8,7 +8,7 @@ I've successfully integrated the SPLG holdings treemap visualization from `treem
 
 ### ✅ Updated Files
 
-1. **`/streamlit/production/simulator.py`**
+1. **`/streamlit/production/tools.py`**
    - Added `create_sector_holdings_treemap(color_metric)` function
    - Added `get_sector_summary()` function
    - Both functions read from `/data/treemap_nodes.csv`
@@ -71,7 +71,7 @@ Uses 305 holdings from `treemap_nodes.csv` with these columns:
 ```
 /streamlit/production/
 ├── app.py                          ✅ Updated
-├── simulator.py                    ✅ Updated
+├── tools.py                    ✅ Updated
 ├── llm_interface.py               (unchanged)
 ├── sector_treemap/
 │   └── treemap.py                 (original, kept for reference)

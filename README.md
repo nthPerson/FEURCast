@@ -42,7 +42,7 @@ Components:
 - Raw & engineered datasets (legacy SPLG filenames, now appending SPYM): [data/SPLG_history_full.csv](data/SPLG_history_full.csv), [data/rich_features_SPLG_history_full.csv](data/rich_features_SPLG_history_full.csv)
 - Model training & evaluation: [streamlit/production/pred_model/scripts/train_gbr_model.py](streamlit/production/pred_model/scripts/train_gbr_model.py), [streamlit/production/pred_model/scripts/evaluate_model.py](streamlit/production/pred_model/scripts/evaluate_model.py)
 - Agentic interface: [streamlit/production/llm_interface.py](streamlit/production/llm_interface.py)
-- Simulation & fallback logic: [streamlit/production/simulator.py](streamlit/production/simulator.py)
+- Simulation & fallback logic: [streamlit/production/tools.py](streamlit/production/tools.py)
 
 ---
 
@@ -179,7 +179,7 @@ Top features saved to `feature_importance.csv` and plotted (top 30). Use to prun
 
 ### 4.8 Failsafe & Fallback
 If model artifacts are missing or load errors occur:
-- [`predict_splg`](streamlit/production/simulator.py) falls back to LLM-generated simulated prediction
+- [`predict_splg`](streamlit/production/tools.py) falls back to LLM-generated simulated prediction
 - Synthesizes plausible `predicted_return`, `direction`, confidence, and synthetic top features
 - Ensures uninterrupted application operation
 
@@ -211,9 +211,9 @@ Capabilities:
 - Tool plan generation & response composition: [`compose_answer`](streamlit/production/llm_interface.py)
 - Prediction explanation: [`explain_prediction`](streamlit/production/llm_interface.py)
 - Access to:
-  - Model predictions via [`predict_splg`](streamlit/production/simulator.py)
-  - Historical prices via [`fetch_prices`](streamlit/production/simulator.py)
-  - Risk metrics via [`compute_risk`](streamlit/production/simulator.py)
+  - Model predictions via [`predict_splg`](streamlit/production/tools.py)
+  - Historical prices via [`fetch_prices`](streamlit/production/tools.py)
+  - Risk metrics via [`compute_risk`](streamlit/production/tools.py)
   - Visualization builders (e.g. sector treemaps, feature importance charts)
 
 Underlying API: OpenAI (API key loaded from `.env` / secrets)
@@ -246,7 +246,7 @@ Underlying API: OpenAI (API key loaded from `.env` / secrets)
 ├── streamlit/
 │   └── production/
 │       ├── app.py
-│       ├── simulator.py
+│       ├── tools.py
 │       ├── llm_interface.py
 │       └── pred_model/
 │           ├── update_and_retrain.py
@@ -361,7 +361,7 @@ Explanation:
 ## 13. Fallback & Robustness
 
 If model artifacts missing or invalid:
-- [`predict_splg`](streamlit/production/simulator.py) synthesizes plausible prediction & feature set
+- [`predict_splg`](streamlit/production/tools.py) synthesizes plausible prediction & feature set
 - UI continues functioning (cards, charts, agent interface)
 - Console/log prompts user to retrain (`train_gbr_model.py --quick`)
 
@@ -398,7 +398,7 @@ Documentation References:
 - No secrets committed to version control
 - Defensive error handling around missing keys in:
   - [`get_openai_client`](streamlit/production/llm_interface.py)
-  - Fallback simulation in [`predict_splg`](streamlit/production/simulator.py)
+  - Fallback simulation in [`predict_splg`](streamlit/production/tools.py)
 
 ---
 
@@ -469,7 +469,7 @@ Fallback prediction may appear if step 3 is skipped.
 
 For additional details, inspect:
 - Execution flow: [`main`](streamlit/production/pred_model/update_and_retrain.py)
-- Fallback logic: [`predict_splg`](streamlit/production/simulator.py)
+- Fallback logic: [`predict_splg`](streamlit/production/tools.py)
 - LLM orchestration: [`route_query`](streamlit/production/llm_interface.py), [`compose_answer`](streamlit/production/llm_interface.py)
 
 ---

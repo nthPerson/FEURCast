@@ -94,7 +94,7 @@ def render_glossary_page():
 from pred_model import get_latest_date_in_dataset
 
 # Import from production package modules
-from simulator import (
+from tools import (
     predict_splg,
     create_price_chart,
     create_sector_risk_treemap,

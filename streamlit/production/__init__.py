@@ -1,10 +1,10 @@
 """
 FUREcast Production Package
 
-Contains the Streamlit application, simulator, and LLM interface.
+Contains the Streamlit application, tools, and LLM interface.
 """
 
-from .simulator import (
+from .tools import (
     predict_splg,
     create_price_chart,
     create_sector_risk_treemap,
@@ -21,7 +21,7 @@ from .llm_interface import (
 )
 
 __all__ = [
-    # Simulator functions
+    # Simulator/tool functions
     'predict_splg',
     'create_price_chart',
     'create_sector_risk_treemap',

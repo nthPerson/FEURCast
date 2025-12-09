@@ -134,7 +134,7 @@ result = predict_with_explanation(model_bundle, features)
 - ✅ Automatic feature column extraction
 - ✅ Self-test functionality
 
-### 6. Streamlit Integration (`../simulator.py`)
+### 6. Streamlit Integration (`../tools.py`)
 
 **Features Implemented:**
 - ✅ Modified `predict_splg()` to use real model when available
@@ -145,7 +145,7 @@ result = predict_with_explanation(model_bundle, features)
 
 **Integration Flow:**
 ```python
-# In simulator.py
+# In tools.py
 prediction = predict_splg(use_real_model=True)
 # Automatically tries real model, falls back to simulation if needed
 ```
@@ -443,7 +443,7 @@ The complete SPLG prediction model infrastructure is now ready for training. The
 - `scripts/` (for training scripts)
 
 ✅ **Integration Complete**:
-- `simulator.py` updated to use real model
+- `tools.py` updated to use real model
 - Automatic fallback to simulation
 - Seamless Streamlit app integration
 
