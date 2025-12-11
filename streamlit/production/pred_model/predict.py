@@ -153,13 +153,13 @@ def predict_with_explanation(features_df: pd.DataFrame,
     # Get top N features
     top_features = importance_df.head(top_n).to_dict('records')
     
-    # Determine direction
-    if predicted_return > 0.002:
+    # Determine direction based on threshold
+    if predicted_return > 0.002:  # (Expected return) > 0.2% shows UP/green
         direction = 'up'
-    elif predicted_return < -0.002:
+    elif predicted_return < -0.002:  # (Expected return) < -0.2% shows DOWN/red
         direction = 'down'
     else:
-        direction = 'neutral'
+        direction = 'neutral'  # 0.2% > (Expected return) > -0.2% shows NEUTRAL/yellow
     
     # Determine confidence based on magnitude
     abs_return = abs(predicted_return)
