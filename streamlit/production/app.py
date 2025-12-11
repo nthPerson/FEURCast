@@ -543,6 +543,11 @@ def render_sidebar():
             st.markdown("""
             Interactive dashboard showcasing SPLG (now SPYM) ETF analysis with GradientBoostingRegressor and LLM orchestration. See dropdowns below for additional details.
             """)
+            promo_path = Path(__file__).resolve().parent / "FUREcast_promo_video.mp4"
+            if st.button("Play Promotional Video", key="play_promo_video_sidebar", use_container_width=True):
+                st.session_state.page = "promo_video"
+                st.session_state.promo_video_path = str(promo_path)
+                safe_rerun()
             st.sidebar.header("Price Chart Filters")
             st.session_state.metric = st.selectbox(
                 "Select Price Metric",
@@ -755,6 +760,31 @@ def render_latest_headlines_strip():
         """,
         unsafe_allow_html=True,
     )
+
+
+def render_promo_video_page():
+    """Render the promotional video page."""
+    st.markdown('<p class="main-header">FUREcast Promotional Video</p>', unsafe_allow_html=True)
+    promo_path = st.session_state.get("promo_video_path")
+    if not promo_path:
+        promo_path = str(Path(__file__).resolve().parent / "FUREcast_promo_video.mp4")
+
+    if os.path.isfile(promo_path):
+        st.video(promo_path)
+        with open(promo_path, "rb") as f:
+            st.download_button(
+                "Download Video",
+                data=f.read(),
+                file_name="FUREcast_promo_video.mp4",
+                mime="video/mp4",
+                key="download_promo_video",
+            )
+    else:
+        st.error(f"Promotional video not found at {promo_path}.")
+
+    if st.button("Back to Dashboard", key="back_from_promo_video"):
+        st.session_state.page = "home"
+        safe_rerun()
 
 
 def compute_macro_and_sentiment():
@@ -1204,6 +1234,10 @@ def main():
     # Simple page routing
     if st.session_state.page == "performance":
         render_performance_page()
+        return
+
+    if st.session_state.page == "promo_video":
+        render_promo_video_page()
         return
 
     # NEW: route glossary page
