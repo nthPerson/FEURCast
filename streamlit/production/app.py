@@ -1587,6 +1587,46 @@ def _load_feature_importance():
     return pd.DataFrame(columns=["feature", "importance"])
 
 
+def _load_model_metadata():
+    """Load the current GBR model metadata from disk."""
+    metadata_path = os.path.join(
+        os.path.dirname(__file__),
+        "pred_model",
+        "models",
+        "model_metadata.json",
+    )
+    try:
+        with open(metadata_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _format_date_range(date_range):
+    """Format a [start, end] list into a readable string."""
+    if not date_range or not isinstance(date_range, (list, tuple)) or len(date_range) != 2:
+        return "N/A"
+    start, end = date_range
+
+    def _format_single_date(value):
+        if value is None:
+            return "N/A"
+        if isinstance(value, (datetime,)):
+            dt_obj = value
+        elif isinstance(value, str):
+            cleaned = value.replace("T", " ").split()[0]
+            try:
+                dt_obj = datetime.strptime(cleaned, "%Y-%m-%d")
+            except Exception:
+                return cleaned
+        else:
+            return str(value)
+
+        return f"{dt_obj.month}-{dt_obj.day:02d}-{dt_obj.year}"
+
+    return f"{_format_single_date(start)} to {_format_single_date(end)}"
+
+
 def _get_gbr_hyperparameter_definitions():
     """Definitions for the GradientBoostingRegressor hyperparameters used in model_metadata.json."""
     return {
@@ -1605,7 +1645,14 @@ def _get_gbr_hyperparameter_definitions():
 
 
 def render_gbr_model_details_page():
-    """Render detailed information about the GBR model features and hyperparameters."""
+    """TODO
+    Add train/test/val dataset split to this page
+        Don't use static values. Source values from streamlit/production/pred_model/models/model_metadata.json
+    Maybe: add video to main page
+    
+    """
+    
+    # """Render detailed information about the GBR model features and hyperparameters."""
     st.markdown('<p class="main-header">GBR Model Details</p>', unsafe_allow_html=True)
     st.markdown("Explore the engineered features and GradientBoostingRegressor hyperparameters used by the FURECast SPLG prediction model.")
 
@@ -1615,6 +1662,9 @@ def render_gbr_model_details_page():
     feat_imp_df = _load_feature_importance()
     feat_defs = _load_feature_definitions_from_markdown()
     hyper_defs = _get_gbr_hyperparameter_definitions()
+    metadata = _load_model_metadata()
+    training_info = metadata.get("performance_metrics", {}).get("training_info", {})
+    hyper_params = metadata.get("hyperparameters", {})
 
     # Unified search across both tables
     search_query = st.text_input(
@@ -1662,17 +1712,83 @@ def render_gbr_model_details_page():
 
     st.markdown("---")
 
+    # ----- Dataset Split Details -----
+    st.markdown("### Dataset Splits")
+    if not training_info:
+        st.warning("Training split details not available in model_metadata.json.")
+    else:
+        split_rows = []
+        split_mapping = [
+            ("train", "Train"),
+            ("val", "Validation"),
+            ("test", "Test"),
+        ]
+        total_samples = 0
+        for key, _ in split_mapping:
+            count = training_info.get(f"n_{key}_samples")
+            if isinstance(count, (int, float)):
+                total_samples += count
+
+        for key, label in split_mapping:
+            count = training_info.get(f"n_{key}_samples", "—")
+            percent = "N/A"
+            if isinstance(count, (int, float)) and total_samples:
+                percent = f"{(count / total_samples) * 100:.1f}%"
+            split_rows.append({
+                "Split": label,
+                "Samples": count,
+                "% of Total": percent,
+                "Date Range": _format_date_range(training_info.get(f"{key}_date_range")),
+            })
+
+        split_df = pd.DataFrame(split_rows)
+
+        if search_query:
+            mask = split_df.apply(
+                lambda row: row.astype(str).str.contains(search_query, case=False, na=False).any(),
+                axis=1,
+            )
+            display_splits = split_df[mask].reset_index(drop=True)
+        else:
+            display_splits = split_df
+
+        st.dataframe(display_splits, width='stretch', hide_index=True)
+        st.caption(f"Features used for training: {training_info.get('n_features', metadata.get('n_features', '—'))}")
+        st.markdown(
+            "_Why these splits? Financial time series require forward-only splits to avoid lookahead bias. "
+            "We train on the older window, validate on the middle window to tune/stop without peeking ahead, "
+            "and reserve the most recent window as an out-of-sample test that reflects live performance._"
+        )
+
+    st.markdown("---")
+
     # ----- Hyperparameter Definitions Table -----
     st.markdown("### GBR Hyperparameters")
     if not hyper_defs:
         st.warning("No hyperparameter definitions available.")
     else:
-        hyper_df = pd.DataFrame(
-            [
-                {"Hyperparameter": name, "Definition": desc}
-                for name, desc in hyper_defs.items()
-            ]
-        )
+        hyper_rows = [
+            {
+                "Hyperparameter": name,
+                "Value": hyper_params.get(name, "—"),
+                "Definition": desc,
+            }
+            for name, desc in hyper_defs.items()
+        ]
+
+        # Include any hyperparameters present in metadata but missing from definitions.
+        for name, value in hyper_params.items():
+            if name not in hyper_defs:
+                hyper_rows.append({
+                    "Hyperparameter": name,
+                    "Value": value,
+                    "Definition": "(Not documented)",
+                })
+
+        hyper_df = pd.DataFrame(hyper_rows)
+        # Ensure Arrow-friendly types: keep values as strings to avoid mixed numeric/string casting issues.
+        hyper_df["Value"] = hyper_df["Value"].astype(str)
+
         if search_query:
             mask = hyper_df.apply(
                 lambda row: row.astype(str).str.contains(search_query, case=False, na=False).any(),
