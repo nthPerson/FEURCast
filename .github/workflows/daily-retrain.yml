@@ -4,11 +4,12 @@ name: Daily Model Retrain
 permissions:
   contents: write
 
-on:
-  schedule:
-    # Run daily at 6:00 PM ET (23:00 UTC, adjust for DST)
-    - cron: '0 23 * * 1-5'  # Monday-Friday
-  workflow_dispatch:  # Allow manual triggers
+# *#*#*#*#*#*#  UNCOMMENT THIS BLOCK TO ENABLE THIS ACTION  *#*#*#*#*#*#*#*#
+# on:
+#   schedule:
+#     # Run daily at 6:00 PM ET (23:00 UTC, adjust for DST)
+#     - cron: '0 23 * * 1-5'  # Monday-Friday
+#   workflow_dispatch:  # Allow manual triggers
 
 jobs:
   update-and-retrain:
